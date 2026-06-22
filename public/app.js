@@ -75,6 +75,7 @@ const state = {
   voice: null,
   voiceSel: null,
   voiceEndpointId: "",
+  voiceProfileId: "", // personal-voice speakerProfileId (GUID); when set, speak via base model + ttsembedding
   body: null,          // { character, style, customized?, photoModel? } paired with the chosen voice
   background: null,    // chosen background { id, label, css }
   green: "#00FF00FF",  // avatar backdrop colour we chroma-key out
@@ -273,9 +274,16 @@ async function speak(text) {
   if (!state.avatarSynth) return;
   interruptAvatar(); // clear any in-flight speech first
   state.stoppedManually = false;
+  // Personal voice (cloned) is spoken via a base model voice with the speaker
+  // profile embedded; Custom/standard voices just use the voice name directly.
+  const inner = escapeXml(speakable(text));
+  const voiceInner = state.voiceProfileId
+    ? `<mstts:ttsembedding speakerProfileId="${state.voiceProfileId}">${inner}</mstts:ttsembedding>`
+    : inner;
+  const mstts = state.voiceProfileId ? ` xmlns:mstts="http://www.w3.org/2001/mstts"` : "";
   const ssml =
-    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">` +
-    `<voice name="${state.voice}">${escapeXml(speakable(text))}</voice></speak>`;
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"${mstts} xml:lang="en-US">` +
+    `<voice name="${state.voice}">${voiceInner}</voice></speak>`;
   els.speakingBar.classList.add("on");
   els.stopBtn.hidden = false;
   state.speaking = true;
@@ -500,8 +508,18 @@ function applySelection() {
     state.body = c.character
       ? { character: c.character, style: c.style || "", customized: true, photoModel: c.photoModel || "" }
       : { character: c.bodyCharacter || fallback.character, style: c.bodyStyle || fallback.style };
-    state.voice = c.voice || fallback.id;          // your Custom Neural Voice
-    state.voiceEndpointId = c.voiceEndpointId || ""; // CNV deployment endpoint id (required for custom voices)
+    if (c.voiceProfileId) {
+      // Personal voice: a base model voice carries your cloned speaker profile via
+      // SSML <mstts:ttsembedding>. No endpoint id (treated like a prebuilt voice).
+      state.voiceProfileId = c.voiceProfileId;
+      state.voice = c.voiceBaseModel || "DragonLatestNeural";
+      state.voiceEndpointId = "";
+    } else {
+      // Custom Neural Voice: a real voice name + its deployment endpoint id.
+      state.voiceProfileId = "";
+      state.voice = c.voice || fallback.id;
+      state.voiceEndpointId = c.voiceEndpointId || "";
+    }
     return;
   }
   const v = currentVoiceObj();
@@ -509,6 +527,7 @@ function applySelection() {
   state.voice = v.id;
   state.body = { character: v.character, style: v.style };
   state.voiceEndpointId = ""; // standard voices need no endpoint id
+  state.voiceProfileId = "";  // standard voices are not personal voices
 }
 function populateVoices() {
   const list = state.cfg.voices[state.gender];

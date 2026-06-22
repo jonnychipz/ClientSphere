@@ -126,7 +126,9 @@ async function getSpeechToken() {
 const customAvatarChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
 const customVoiceName = (process.env.CUSTOM_VOICE_NAME || "").trim();
 const customVoiceEndpoint = (process.env.CUSTOM_VOICE_ENDPOINT_ID || "").trim();
-const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarChar || customVoiceName))
+const customVoiceProfileId = (process.env.CUSTOM_VOICE_PROFILE_ID || "").trim();
+const customVoiceBaseModel = (process.env.CUSTOM_VOICE_BASE_MODEL || "DragonLatestNeural").trim();
+const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarChar || customVoiceName || customVoiceProfileId))
   ? {
       enabled: true,
       label: process.env.CUSTOM_AVATAR_LABEL || "You (custom)",
@@ -137,8 +139,10 @@ const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarCha
       // Standard avatar body paired with the custom voice while no custom face exists yet:
       bodyCharacter: (process.env.CUSTOM_BODY_CHARACTER || "harry").trim(),
       bodyStyle: (process.env.CUSTOM_BODY_STYLE || "business").trim(),
-      voice: customVoiceName,                            // your Custom Neural Voice name (e.g. en-GB-JonnychipzNeural)
+      voice: customVoiceName,                            // Custom Neural Voice name (e.g. en-GB-JonnychipzNeural)
       voiceEndpointId: customVoiceEndpoint,              // CNV deployment/endpoint id (required for custom voices)
+      voiceProfileId: customVoiceProfileId,              // Personal voice speakerProfileId (GUID) — used instead of a CNV
+      voiceBaseModel: customVoiceBaseModel,              // base model voice carrying the personal voice (e.g. DragonLatestNeural)
     }
   : null;
 
