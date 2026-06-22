@@ -1,22 +1,30 @@
 :root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --panel-2: #1c2330;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #7c3aed;
-  --accent-2: #2f81f7;
+  --bg: #0a0813;
+  --panel: #14101f;
+  --panel-2: #1b1630;
+  --border: #2f2750;
+  --text: #ece9f6;
+  --muted: #9a92b8;
+  --accent: #8b5cf6;
+  --accent-2: #a855f7;
+  --accent-3: #6d28d9;
+  --glow: rgba(139, 92, 246, 0.55);
+  --grad: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 45%, #6d28d9 100%);
+  --menu-bg: linear-gradient(145deg, rgba(139, 92, 246, 0.14), rgba(139, 92, 246, 0.04));
+  --menu-border: rgba(139, 92, 246, 0.38);
   --green: #2ea043;
   --radius: 16px;
-  --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
   font-family: "Inter", system-ui, sans-serif;
-  background: radial-gradient(1200px 800px at 15% -10%, #1b2440 0%, var(--bg) 55%);
+  background:
+    radial-gradient(1200px 800px at 12% -10%, #241a45 0%, rgba(36,26,69,0) 55%),
+    radial-gradient(1000px 700px at 100% 0%, #1a1340 0%, rgba(26,19,64,0) 50%),
+    var(--bg);
   color: var(--text);
   overflow: hidden;
 }
@@ -503,4 +511,124 @@ select {
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; overflow: auto; }
   body { overflow: auto; }
+}
+
+/* ============================================================
+   HI-TECH PURPLE MENU THEME — unified styling for all controls
+   ============================================================ */
+
+/* Brand wordmark + logo glow */
+.brand .logo {
+  background: linear-gradient(145deg, #1c1633, #0e0a1a);
+  box-shadow: 0 0 22px rgba(139, 92, 246, 0.55), inset 0 0 12px rgba(139, 92, 246, 0.15);
+}
+.brand h1 {
+  background: linear-gradient(90deg, #d8c9ff 0%, #a855f7 50%, #8b5cf6 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 24px rgba(139, 92, 246, 0.35);
+}
+
+/* Shared "menu pill" look: tool buttons, segments, chips, drawer toggle,
+   user-chip links, mic/stop, ghost buttons */
+.tool-btn,
+.seg,
+.chip,
+.drawer-toggle,
+.user-chip a,
+.mic,
+select,
+.composer textarea {
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s, background 0.18s;
+}
+.tool-btn:hover,
+.chip:hover,
+.drawer-toggle:hover,
+.user-chip a:hover,
+.mic:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.35), 0 0 18px -2px var(--glow);
+  color: #fff;
+  transform: translateY(-1px);
+}
+select:focus, .composer textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.4), 0 0 16px -3px var(--glow);
+}
+
+/* Segmented control (gender) */
+.seg { padding: 2px; gap: 2px; }
+.seg button { border-radius: 8px; }
+.seg button.active {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 0 16px -3px var(--glow);
+}
+
+/* Voice on/off toggle */
+.toggle {
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  transition: 0.18s;
+}
+.toggle:hover { border-color: var(--accent); box-shadow: 0 0 18px -4px var(--glow); }
+.toggle[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px -4px var(--glow);
+}
+.toggle[aria-checked="true"] .dot { background: var(--accent-2); box-shadow: 0 0 12px var(--accent-2); }
+
+/* Suggestion chips */
+.chip { background: var(--menu-bg); }
+
+/* Primary action buttons (send, modal CTAs) share the brand gradient + glow */
+.send, .modal-cta:not(.secondary), .roleplay-banner button, .gh-btn {
+  background: var(--grad) !important;
+  box-shadow: 0 4px 18px -4px var(--glow);
+}
+.send:hover, .modal-cta:not(.secondary):hover, .roleplay-banner button:hover {
+  box-shadow: 0 6px 24px -4px var(--glow); transform: translateY(-1px);
+}
+
+/* Status pill when live/connecting gets a purple tech glow */
+.brand .status.live { background: var(--accent); box-shadow: 0 0 14px -2px var(--glow); }
+.brand .status.connecting { background: var(--accent-3); box-shadow: 0 0 14px -2px var(--glow); }
+
+/* Scene swatches: purple ring + glow on hover/active */
+.swatch:hover { border-color: var(--accent); box-shadow: 0 0 14px -3px var(--glow); }
+.swatch.active { border-color: var(--accent-2); box-shadow: 0 0 0 2px var(--accent), 0 0 16px -2px var(--glow); }
+
+/* Citation chips + cite pills */
+.cite { background: rgba(139,92,246,0.08); border-color: var(--menu-border); }
+
+/* Drawer + resource links */
+.drawer { background: linear-gradient(180deg, #14101f, #0e0a18); }
+.drawer-link { background: var(--menu-bg); border-color: var(--menu-border); }
+.drawer-link:hover { border-color: var(--accent); box-shadow: 0 0 16px -4px var(--glow); transform: translateX(-2px); }
+
+/* User chip avatar ring */
+.user-chip img { border-color: var(--menu-border); box-shadow: 0 0 10px -3px var(--glow); }
+.user-chip a.admin-link { color: #d8c9ff; border-color: var(--accent); }
+
+/* Modal polish */
+.modal { background: linear-gradient(180deg, #14101f, #100b1c); border-color: var(--menu-border); box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 40px -10px var(--glow); }
+.fld select, .fld input { background: var(--menu-bg); border-color: var(--menu-border); }
+.roi-row.headline { background: var(--menu-bg); box-shadow: inset 0 0 0 1px var(--menu-border); }
+.roi-row.headline .v { color: #d8c9ff; }
+
+/* Idle orb gets a stronger neon halo */
+.orb { box-shadow: 0 0 80px rgba(139, 92, 246, 0.7), inset 0 0 30px rgba(255,255,255,0.08); }
+
+/* Speaking equalizer bars in brand purple */
+.speaking-bar span { background: linear-gradient(var(--accent-2), var(--accent-3)); }
+
+/* Thin animated top accent line on each panel for a hi-tech feel */
+.stage, .chat { position: relative; }
+.stage::before, .chat::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; border-radius: 16px 16px 0 0;
+  background: linear-gradient(90deg, transparent, var(--accent-2), var(--accent), transparent);
+  opacity: 0.7;
 }

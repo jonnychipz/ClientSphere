@@ -1,12 +1,18 @@
 :root {
-  --bg: #0d1117; --panel: #161b22; --panel-2: #1c2330; --border: #30363d;
-  --text: #e6edf3; --muted: #8b949e; --accent: #7c3aed; --accent-2: #2f81f7; --green: #2ea043;
+  --bg: #0a0813; --panel: #14101f; --panel-2: #1b1630; --border: #2f2750;
+  --text: #ece9f6; --muted: #9a92b8; --accent: #8b5cf6; --accent-2: #a855f7;
+  --accent-3: #6d28d9; --green: #2ea043;
+  --glow: rgba(139, 92, 246, 0.55);
+  --menu-bg: linear-gradient(145deg, rgba(139, 92, 246, 0.14), rgba(139, 92, 246, 0.04));
+  --menu-border: rgba(139, 92, 246, 0.38);
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
   font-family: "Inter", system-ui, sans-serif;
-  background: radial-gradient(1200px 800px at 50% -10%, #1b2440 0%, var(--bg) 60%);
+  background:
+    radial-gradient(900px 600px at 50% -10%, #241a45 0%, rgba(36,26,69,0) 55%),
+    var(--bg);
   color: var(--text); display: flex; align-items: center; justify-content: center; padding: 24px;
 }
 .auth-card {
@@ -54,3 +60,30 @@ h1 {
   border-radius: 10px; padding: 10px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer;
 }
 .dev-err { color: #f85149; font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+
+/* ===== Hi-tech purple theme — auth pages ===== */
+.auth-card {
+  background: linear-gradient(180deg, #16111f 0%, #0e0a18 100%);
+  border-color: var(--menu-border);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 50px -14px var(--glow);
+  position: relative; overflow: hidden;
+}
+.auth-card::before { content:""; position:absolute; inset:0 0 auto 0; height:3px; background: linear-gradient(90deg, transparent, var(--accent-2), var(--accent), transparent); }
+.auth-logo {
+  background: linear-gradient(145deg, #1c1633, #0e0a1a);
+  border-color: var(--menu-border);
+  box-shadow: 0 0 26px rgba(139,92,246,0.6), inset 0 0 14px rgba(139,92,246,0.18);
+}
+h1 {
+  background: linear-gradient(90deg, #d8c9ff, #a855f7 50%, #8b5cf6);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 24px rgba(139,92,246,0.35);
+}
+.gh-btn { transition: 0.18s; }
+.gh-btn:hover { box-shadow: 0 8px 26px -4px var(--glow); transform: translateY(-1px); }
+.pill.pending { background: rgba(139,92,246,0.16); color: #a78bfa; border-color: var(--accent); }
+.link-btn { color: var(--accent-2); }
+#devForm input { background: rgba(139,92,246,0.08); border-color: var(--menu-border); }
+#devForm input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 14px -4px var(--glow); }
+#devForm button { background: linear-gradient(135deg, var(--accent-2), var(--accent-3)); box-shadow: 0 4px 16px -4px var(--glow); }
+.dev-divider::before, .dev-divider::after { background: var(--menu-border); }
