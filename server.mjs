@@ -110,6 +110,21 @@ async function getSpeechToken() {
   return cachedToken;
 }
 
+// ---- Custom avatar + voice (your likeness), enabled via .env once trained ----
+const customAvatarChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
+const customVoiceName = (process.env.CUSTOM_VOICE_NAME || "").trim();
+const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarChar || customVoiceName))
+  ? {
+      enabled: true,
+      label: process.env.CUSTOM_AVATAR_LABEL || "You (custom)",
+      gender: (process.env.CUSTOM_AVATAR_GENDER || "male").toLowerCase() === "female" ? "female" : "male",
+      character: customAvatarChar,                       // custom video/photo avatar model name
+      style: (process.env.CUSTOM_AVATAR_STYLE || "").trim(),
+      photoModel: (process.env.CUSTOM_AVATAR_PHOTO_MODEL || "").trim(), // e.g. "vasa-1" for photo avatar
+      voice: customVoiceName,                            // your Custom Neural Voice deployment name
+    }
+  : null;
+
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -122,6 +137,7 @@ app.get("/api/config", (req, res) => {
     voices: VOICES,
     backgrounds: BACKGROUNDS,
     resources: RESOURCES,
+    custom: CUSTOM,
     avatarGreen: AVATAR_GREEN,
   });
 });

@@ -35,7 +35,8 @@ const state = {
   threadId: null,
   gender: "female",
   voice: null,
-  body: null,          // { character, style } paired with the chosen voice
+  voiceSel: null,
+  body: null,          // { character, style, customized?, photoModel? } paired with the chosen voice
   background: null,    // chosen background { id, label, css }
   green: "#00FF00FF",  // avatar backdrop colour we chroma-key out
   rafId: null,
@@ -268,9 +269,14 @@ async function startAvatar() {
   if (!relayRes.ok) throw new Error("Could not get relay token");
   const relay = await relayRes.json();
 
-  const body = state.body || { character: "lisa", style: "graceful-standing" };
+  const body = state.body || { character: "lisa", style: "casual-sitting" };
   const videoFormat = new SDK.AvatarVideoFormat();
-  const avatarConfig = new SDK.AvatarConfig(body.character, body.style, videoFormat);
+  const avatarConfig = new SDK.AvatarConfig(body.character, body.style || "", videoFormat);
+  // Custom (your-likeness) avatar: flag it and, for a photo avatar, set the base model.
+  if (body.customized) {
+    avatarConfig.customized = true;
+    if (body.photoModel) avatarConfig.photoAvatarBaseModel = body.photoModel;
+  }
   // Render on a flat green backdrop so we can chroma-key it out and show any
   // background behind the avatar.
   avatarConfig.backgroundColor = state.green;
@@ -428,26 +434,45 @@ function stopListening() {
 }
 
 // ---------- gender / voice / body pickers ----------
+const CUSTOM_VAL = "__custom__";
 function currentVoiceObj() {
-  return state.cfg.voices[state.gender].find((v) => v.id === state.voice) || state.cfg.voices[state.gender][0];
+  return state.cfg.voices[state.gender].find((v) => v.id === state.voiceSel) || state.cfg.voices[state.gender][0];
 }
-function applyBodyFromVoice() {
+// Resolve the selected dropdown value into the actual SSML voice + avatar body.
+function applySelection() {
+  const c = state.cfg.custom;
+  if (state.voiceSel === CUSTOM_VAL && c) {
+    const fallback = state.cfg.voices[c.gender || state.gender][0];
+    state.body = c.character
+      ? { character: c.character, style: c.style || "", customized: true, photoModel: c.photoModel || "" }
+      : { character: fallback.character, style: fallback.style };
+    state.voice = c.voice || fallback.id; // your CNV, or a standard voice if none yet
+    return;
+  }
   const v = currentVoiceObj();
+  state.voiceSel = v.id;
   state.voice = v.id;
   state.body = { character: v.character, style: v.style };
 }
 function populateVoices() {
   const list = state.cfg.voices[state.gender];
   els.voiceSelect.innerHTML = "";
+  // "You (custom)" preset appears once custom assets are configured in .env.
+  if (state.cfg.custom) {
+    const opt = document.createElement("option");
+    opt.value = CUSTOM_VAL;
+    opt.textContent = "⭐ " + state.cfg.custom.label;
+    els.voiceSelect.appendChild(opt);
+  }
   list.forEach((v) => {
     const opt = document.createElement("option");
     opt.value = v.id;
     opt.textContent = v.label;
     els.voiceSelect.appendChild(opt);
   });
-  state.voice = list[0].id;
-  els.voiceSelect.value = state.voice;
-  applyBodyFromVoice();
+  state.voiceSel = list[0].id;
+  els.voiceSelect.value = state.voiceSel;
+  applySelection();
 }
 
 async function restartAvatarIfLive(msg) {
@@ -477,9 +502,9 @@ async function setGender(g) {
   await restartAvatarIfLive("Couldn't switch avatar");
 }
 
-async function setVoice(voiceId) {
-  state.voice = voiceId;
-  applyBodyFromVoice(); // changing voice also changes the body
+async function setVoice(value) {
+  state.voiceSel = value;
+  applySelection(); // changing voice also changes the body (and may be the custom "You")
   await restartAvatarIfLive("Couldn't switch voice/body");
 }
 

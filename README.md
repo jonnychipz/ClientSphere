@@ -43,6 +43,12 @@ Backend (server.mjs, Express, Node)
 
 > **Auth is 100% keyless (Microsoft Entra ID).** No API keys are stored or sent to the browser. The tenant enforces `disableLocalAuth`, so the backend uses `DefaultAzureCredential` and brokers short‑lived Speech tokens to the client.
 
+## Custom avatar & voice (your likeness)
+
+Hubble can use **your own face and voice** as the avatar via Azure's Custom Photo/Video Avatar + Custom Neural Voice. Both are **Limited Access (Responsible AI gated)** — you apply at https://aka.ms/customneural, prove consent, train in Microsoft Foundry, then flip a flag.
+
+The app is **already wired**: set the `CUSTOM_*` values in `.env` and a **"⭐ You (custom)"** preset appears in the Voice & body picker (`avatarConfig.customized`, `photoAvatarBaseModel`, and your custom voice). Full kit — consent scripts, photo spec, voice recording guide, and a step-by-step submission/training guide — is in **`custom-avatar/`**.
+
 ## Project layout
 ```
 .
