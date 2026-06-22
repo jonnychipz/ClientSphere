@@ -5,18 +5,19 @@ An AI voice + avatar coach that helps sellers get up to speed selling the **enti
 ![Hubble live](hubble-live.png)
 
 ## What it does
+- **GitHub-branded identity** — Octocat logo as the app icon and infused into the idle orb; "HUBBLE" wordmark in a technical display font with the strapline *Your AI GitHub sales coach*.
 - **Strictly GitHub-only** — Hubble answers only on GitHub products, pricing, licensing and selling. Anything off-topic gets a friendly redirect with example questions to ask instead.
 - **Greets you by name** — when a conversation starts, Hubble asks your first name and uses it throughout.
-- **Conversational, spoken style** — short, get-to-the-point answers (no monologues); Hubble offers to expand rather than dumping detail.
+- **Conversational, spoken style** — short, get-to-the-point answers (no monologues); when an answer would be long, Hubble gives the headline and **asks if you want the long version**.
 - **Coaches around the answer** — explains the surrounding GitHub context and customer impact, and proactively asks for customer/deal context to tailor pricing, discovery questions, positioning and next steps.
-- **Deep expert** — every GitHub product, **pricing in USD / GBP / EUR**, and licensing, **grounded in a knowledge base with citations**.
+- **Official documentation links in chat** — answers include clickable official GitHub / Microsoft Learn links (never read aloud).
+- **Hideaway resources drawer** — a slide-in panel (☰) with curated links to GitHub pricing, Copilot, Advanced Security, docs, Trust Center, roadmap, changelog and more.
 - **Voice assistant on/off** — toggle a live, lip‑synced **talking avatar** that speaks Hubble's replies.
 - **Barge-in** — typing or talking instantly stops the avatar mid-sentence and refocuses on the new question (thread keeps context).
 - **Stop button** — a red ⏹ Stop appears while Hubble is speaking to silence the avatar on demand.
-- **Hands the mic back** — after Hubble finishes speaking, the mic re-opens automatically so you can just talk.
-- **Avatar choice** — switch between a **female (Lisa)** and **male (Harry)** avatar, each with a selectable neural **voice** (British / US / Australian).
-- **Avatar bodies tied to each voice** — every voice picks a **distinct avatar body** (Azure standard avatars: Lisa, Lori, Meg for female; Harry, Max for male). Changing the voice changes who you see.
-- **Background chooser** — eight gradient backgrounds (Aurora, GitHub Dark, Studio Teal, Sunset, Midnight, Slate, Emerald, Clean Light) via swatch picker; the avatar is rendered on a green backdrop and **chroma-keyed in the browser** so any background shows behind Hubble. **Randomises on first load.**
+- **Hands the mic back** — after Hubble finishes speaking, the mic re-opens automatically — **except** when you signal you're ending the call (e.g. "bye", "that's all"), where it stays closed.
+- **Avatar bodies tied to each voice** — every voice picks a **distinct avatar body** (Lisa, Lori, Meg female; Harry, Max male). Changing the voice changes who you see.
+- **Scene backgrounds** — 10 photographic landscape/office scenes chroma-keyed behind the avatar. The **scene picker only appears while the avatar is live**, and **randomises on first load**.
 - **Type or talk** — full text chat plus a **microphone** (speech‑to‑text) input.
 
 ## Architecture

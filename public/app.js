@@ -15,7 +15,13 @@ const els = {
   video: document.getElementById("avatarVideo"),
   canvas: document.getElementById("avatarCanvas"),
   avatarWrap: document.getElementById("avatarWrap"),
+  bgPicker: document.getElementById("bgPicker"),
   bgSwatches: document.getElementById("bgSwatches"),
+  drawer: document.getElementById("drawer"),
+  drawerScrim: document.getElementById("drawerScrim"),
+  drawerToggle: document.getElementById("drawerToggle"),
+  drawerClose: document.getElementById("drawerClose"),
+  drawerLinks: document.getElementById("drawerLinks"),
   audio: document.getElementById("avatarAudio"),
   idle: document.getElementById("avatarIdle"),
   status: document.getElementById("avatarStatus"),
@@ -47,6 +53,7 @@ const state = {
   pendingText: null,
   userName: null,
   greeted: false,
+  endCall: false,
 };
 
 // ---------- helpers ----------
@@ -66,6 +73,17 @@ function escapeHtml(s) {
 function escapeXml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
 }
+// Turn bare URLs and **bold** into safe HTML (input is already escaped).
+function formatRich(escaped) {
+  let html = escaped.replace(/\n/g, "<br>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  html = html.replace(/(https?:\/\/[^\s<]+[^\s<.,;:)\]])/g, (m) => {
+    let label = m.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    if (label.length > 42) label = label.slice(0, 40) + "…";
+    return `<a href="${m}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+  return html;
+}
 
 // ---------- rendering ----------
 function addMessage(role, text, citations) {
@@ -73,7 +91,7 @@ function addMessage(role, text, citations) {
   wrap.className = "msg " + (role === "user" ? "user" : "bot");
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
+  bubble.innerHTML = role === "user" ? escapeHtml(text).replace(/\n/g, "<br>") : formatRich(escapeHtml(text));
   if (citations && citations.length) {
     const c = document.createElement("div");
     c.className = "cites";
@@ -110,11 +128,27 @@ async function sendMessage(text) {
   // and refocuses on what was just asked — context is preserved by the thread.
   interruptAvatar();
   stopListening();
+  // Detect "I'm wrapping up" intent so we don't reopen the mic after the reply.
+  state.endCall = isEndingIntent(text);
   addMessage("user", text);
   els.input.value = "";
   els.input.style.height = "auto";
   if (state.busy) { state.pendingText = text; return; } // queue until current run finishes
   runChat(text);
+}
+
+// Heuristic: is the user signalling the conversation/call is over?
+function isEndingIntent(text) {
+  const t = " " + text.toLowerCase().replace(/[^\w\s']/g, " ").replace(/\s+/g, " ") + " ";
+  const phrases = [
+    "bye", "goodbye", "good bye", "see you", "see ya", "that's all", "thats all",
+    "that's it", "thats it", "that will be all", "nothing else", "nothing more",
+    "no more questions", "i'm done", "im done", "we're done", "were done", "all done",
+    "i'm good", "im good", "that's everything", "thats everything", "gotta go",
+    "got to go", "have to go", "end call", "end the call", "hang up", "wrap up",
+    "wrap it up", "let's wrap", "thanks that's all", "speak later", "talk later", "catch you later",
+  ];
+  return phrases.some((p) => t.includes(" " + p + " ") || t.includes(" " + p));
 }
 
 async function runChat(text) {
@@ -202,10 +236,12 @@ async function speak(text) {
     els.speakingBar.classList.remove("on");
     els.stopBtn.hidden = true;
     // Hand the conversation back: re-open the mic so the user can just talk —
-    // unless the user pressed Stop (they chose silence).
-    if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually) {
+    // unless the user pressed Stop, or signalled they're ending the call.
+    const canReopen = state.voiceOn && state.avatarLive && !state.listening &&
+      !state.stoppedManually && !state.endCall;
+    if (canReopen) {
       setTimeout(() => {
-        if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually) startListening();
+        if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually && !state.endCall) startListening();
       }, 450);
     }
   }
@@ -265,6 +301,8 @@ async function startAvatar() {
   if (result.reason === SDK.ResultReason.SynthesizingAudioCompleted || result.reason === undefined) {
     state.avatarLive = true;
     setStatus("live", "live");
+    applyBackdrop();       // show the chosen scene behind the avatar
+    showBgPicker(true);    // scene picker is only relevant while the avatar is shown
   } else {
     let detail = "reason " + result.reason;
     try {
@@ -313,6 +351,7 @@ function stopChromaLoop() {
 
 function stopAvatar() {
   stopChromaLoop();
+  clearBackdrop();
   try { state.avatarSynth && state.avatarSynth.close(); } catch {}
   try { state.peer && state.peer.close(); } catch {}
   state.avatarSynth = null;
@@ -333,6 +372,7 @@ async function setVoiceOn(on) {
   els.voiceToggleLbl.textContent = on ? "On" : "Off";
   if (on) {
     try {
+      state.endCall = false;
       toast("Waking Hubble's avatar… this can take a few seconds.");
       await startAvatar();
       els.micBtn.disabled = false;
@@ -345,9 +385,11 @@ async function setVoiceOn(on) {
       els.voiceToggle.setAttribute("aria-checked", "false");
       els.voiceToggleLbl.textContent = "Off";
       stopAvatar();
+      showBgPicker(false);
     }
   } else {
     stopAvatar();
+    showBgPicker(false);
     els.micBtn.disabled = true;
     stopListening();
   }
@@ -356,8 +398,11 @@ async function setVoiceOn(on) {
 // ---------- speech-to-text ----------
 async function startListening() {
   if (state.listening) return stopListening();
-  // Starting to talk interrupts the avatar mid-speech (barge-in)
+  // Starting to talk interrupts the avatar mid-speech (barge-in) and means the
+  // user is NOT ending the call — clear those flags.
   interruptAvatar();
+  state.endCall = false;
+  state.stoppedManually = false;
   if (!state.speechConfig) await refreshToken();
   const audioConfig = SDK.AudioConfig.fromDefaultMicrophoneInput();
   const rec = new SDK.SpeechRecognizer(state.speechConfig, audioConfig);
@@ -438,12 +483,21 @@ async function setVoice(voiceId) {
   await restartAvatarIfLive("Couldn't switch voice/body");
 }
 
-// ---------- background chooser ----------
-function applyBackground(bg) {
+// ---------- scene background chooser (only when the avatar is on screen) ----------
+function backdropCss(bg) {
+  return `center / cover no-repeat url("${bg.img}")`;
+}
+function applyBackdrop() {
+  if (state.background) els.avatarWrap.style.background = backdropCss(state.background);
+}
+function clearBackdrop() {
+  els.avatarWrap.style.background = ""; // revert to the default idle gradient
+}
+function selectBackground(bg) {
   state.background = bg;
-  els.avatarWrap.style.background = bg.css;
   [...els.bgSwatches.children].forEach((s) => s.classList.toggle("active", s.dataset.id === bg.id));
   try { localStorage.setItem("hubble.bg", bg.id); } catch {}
+  if (state.avatarLive) applyBackdrop(); // only visible while the avatar is shown
 }
 function renderBackgrounds() {
   const list = state.cfg.backgrounds || [];
@@ -453,8 +507,8 @@ function renderBackgrounds() {
     b.className = "swatch";
     b.dataset.id = bg.id;
     b.title = bg.label;
-    b.style.background = bg.css;
-    b.addEventListener("click", () => applyBackground(bg));
+    b.style.backgroundImage = `url("${bg.img}")`;
+    b.addEventListener("click", () => selectBackground(bg));
     els.bgSwatches.appendChild(b);
   });
   // Restore last choice, otherwise randomise for this load.
@@ -464,7 +518,38 @@ function renderBackgrounds() {
     if (saved) chosen = list.find((x) => x.id === saved);
   } catch {}
   if (!chosen && list.length) chosen = list[Math.floor(Math.random() * list.length)];
-  if (chosen) applyBackground(chosen);
+  if (chosen) selectBackground(chosen);
+}
+function showBgPicker(show) {
+  els.bgPicker.hidden = !show;
+}
+
+// ---------- GitHub resources drawer ----------
+function renderResources() {
+  const groups = state.cfg.resources || [];
+  els.drawerLinks.innerHTML = "";
+  groups.forEach((grp) => {
+    const lbl = document.createElement("div");
+    lbl.className = "drawer-group-label";
+    lbl.textContent = grp.group;
+    els.drawerLinks.appendChild(lbl);
+    grp.links.forEach((l) => {
+      const a = document.createElement("a");
+      a.className = "drawer-link";
+      a.href = l.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.innerHTML = `<span class="dl-ico">${l.icon}</span><span><span class="dl-title">${l.title}</span><span class="dl-sub">${l.sub}</span></span>`;
+      els.drawerLinks.appendChild(a);
+    });
+  });
+}
+function openDrawer(open) {
+  els.drawer.classList.toggle("open", open);
+  els.drawer.setAttribute("aria-hidden", String(!open));
+  els.drawerScrim.hidden = false;
+  requestAnimationFrame(() => els.drawerScrim.classList.toggle("show", open));
+  if (!open) setTimeout(() => { if (!els.drawer.classList.contains("open")) els.drawerScrim.hidden = true; }, 280);
 }
 
 // ---------- init ----------
@@ -475,7 +560,9 @@ async function init() {
   state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
   populateVoices();
-  renderBackgrounds(); // randomises on first load
+  renderBackgrounds(); // randomises on first load (applied when avatar is shown)
+  renderResources();
+  showBgPicker(false); // hidden until the avatar is live
 
   els.composer.addEventListener("submit", (e) => { e.preventDefault(); sendMessage(els.input.value); });
   els.input.addEventListener("keydown", (e) => {
@@ -496,6 +583,11 @@ async function init() {
   document.querySelectorAll(".chip").forEach((c) =>
     c.addEventListener("click", () => sendMessage(c.textContent))
   );
+  // GitHub resources drawer
+  els.drawerToggle.addEventListener("click", () => openDrawer(true));
+  els.drawerClose.addEventListener("click", () => openDrawer(false));
+  els.drawerScrim.addEventListener("click", () => openDrawer(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") openDrawer(false); });
 
   // keep the speech auth token fresh for long sessions
   setInterval(() => { if (state.speechConfig) refreshToken().catch(() => {}); }, 8 * 60 * 1000);

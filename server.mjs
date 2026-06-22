@@ -55,17 +55,42 @@ const VOICES = {
 };
 
 // Avatar is rendered on a green backdrop and chroma-keyed out in the browser,
-// so any of these CSS backgrounds can sit behind Hubble (richer than plain white).
+// so any of these scene images can sit behind Hubble. Served locally from
+// /public/backgrounds, so no external dependency at runtime.
 const AVATAR_GREEN = "#00FF00FF";
 const BACKGROUNDS = [
-  { id: "aurora", label: "Aurora", css: "linear-gradient(135deg, #7c3aed 0%, #2f81f7 100%)" },
-  { id: "githubDark", label: "GitHub Dark", css: "linear-gradient(160deg, #21262d 0%, #0d1117 100%)" },
-  { id: "teal", label: "Studio Teal", css: "linear-gradient(135deg, #0f766e 0%, #134e4a 100%)" },
-  { id: "sunset", label: "Sunset", css: "linear-gradient(135deg, #f97316 0%, #be185d 100%)" },
-  { id: "midnight", label: "Midnight", css: "linear-gradient(160deg, #1e3a8a 0%, #0f172a 100%)" },
-  { id: "slate", label: "Slate Office", css: "linear-gradient(135deg, #475569 0%, #1e293b 100%)" },
-  { id: "emerald", label: "Emerald", css: "linear-gradient(135deg, #059669 0%, #064e3b 100%)" },
-  { id: "light", label: "Clean Light", css: "linear-gradient(160deg, #f8fafc 0%, #dbe2ea 100%)" },
+  { id: "modern-office", label: "Modern Office", img: "/backgrounds/01-modern-office.jpg" },
+  { id: "city-skyline", label: "City Skyline", img: "/backgrounds/02-city-skyline.jpg" },
+  { id: "mountains", label: "Mountains", img: "/backgrounds/03-mountains.jpg" },
+  { id: "tech-workspace", label: "Tech Workspace", img: "/backgrounds/04-tech-workspace.jpg" },
+  { id: "boardroom", label: "Boardroom", img: "/backgrounds/05-boardroom.jpg" },
+  { id: "forest", label: "Sunlit Forest", img: "/backgrounds/06-forest.jpg" },
+  { id: "library", label: "Grand Library", img: "/backgrounds/07-library.jpg" },
+  { id: "coastal", label: "Coastline", img: "/backgrounds/08-coastal.jpg" },
+  { id: "coworking", label: "Co-working Space", img: "/backgrounds/09-coworking.jpg" },
+  { id: "skyline-night", label: "Sunset Skyline", img: "/backgrounds/10-skyline-night.jpg" },
+];
+
+// Key GitHub (and Microsoft) resources surfaced in the hideaway drawer.
+const RESOURCES = [
+  { group: "Products & pricing", links: [
+    { icon: "💷", title: "GitHub Pricing", sub: "Plans & list prices", url: "https://github.com/pricing" },
+    { icon: "🤖", title: "GitHub Copilot", sub: "Features & plans", url: "https://github.com/features/copilot" },
+    { icon: "🛡️", title: "Advanced Security", sub: "Secret Protection & Code Security", url: "https://github.com/security/advanced-security" },
+    { icon: "🏢", title: "GitHub Enterprise", sub: "Cloud & Server", url: "https://github.com/enterprise" },
+  ]},
+  { group: "Documentation", links: [
+    { icon: "📚", title: "GitHub Docs", sub: "docs.github.com", url: "https://docs.github.com" },
+    { icon: "📘", title: "Copilot Docs", sub: "Setup, plans & billing", url: "https://docs.github.com/copilot" },
+    { icon: "💳", title: "Billing & Licensing", sub: "How billing works", url: "https://docs.github.com/billing" },
+    { icon: "🎓", title: "Microsoft Learn — GitHub", sub: "learn.microsoft.com", url: "https://learn.microsoft.com/training/github/" },
+  ]},
+  { group: "Sell & stay current", links: [
+    { icon: "🏆", title: "Customer Stories", sub: "Proof points", url: "https://github.com/customer-stories" },
+    { icon: "🔒", title: "GitHub Trust Center", sub: "Security & compliance", url: "https://github.com/trust-center" },
+    { icon: "🗺️", title: "Public Roadmap", sub: "What's coming", url: "https://github.com/orgs/github/projects/4247" },
+    { icon: "📰", title: "Changelog", sub: "Latest releases", url: "https://github.blog/changelog/" },
+  ]},
 ];
 
 // ---- Cached Speech authorization token for the browser SDK (keyless) ----
@@ -92,10 +117,11 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/api/config", (req, res) => {
   res.json({
     agentName: "Hubble",
-    tagline: "Your GitHub sales coach",
+    tagline: "Your AI GitHub sales coach",
     speechRegion: SPEECH_REGION,
     voices: VOICES,
     backgrounds: BACKGROUNDS,
+    resources: RESOURCES,
     avatarGreen: AVATAR_GREEN,
   });
 });
