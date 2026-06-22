@@ -704,3 +704,16 @@ select:focus, .composer textarea:focus {
   border: 1px solid var(--menu-border); border-radius: 999px; padding: 4px 10px; transition: 0.15s;
 }
 .about-links a:hover { border-color: var(--accent); box-shadow: 0 0 14px -4px var(--glow); }
+
+/* Native select option list: force readable dark bg + light text when expanded */
+select option,
+.fld select option {
+  background-color: #1b1630;
+  color: #ece9f6;
+}
+select option:checked,
+select option:hover {
+  background-color: #2f2750;
+  color: #fff;
+}
+select { color: var(--text); }
