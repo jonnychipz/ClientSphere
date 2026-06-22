@@ -259,6 +259,23 @@ select {
   font-size: 18px; cursor: pointer; transition: 0.15s;
 }
 .send { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 0; color: #fff; }
+.stop {
+  flex: 0 0 auto;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 0;
+  background: #da3633;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s;
+  animation: pulse-stop 1.2s infinite;
+}
+.stop[hidden] { display: none; }
+.stop:hover { background: #f85149; transform: translateY(-1px); }
+@keyframes pulse-stop { 0%,100%{ box-shadow: 0 0 0 0 rgba(218,54,51,0.55);} 50%{ box-shadow: 0 0 0 8px rgba(218,54,51,0);} }
 .mic:hover:not(:disabled), .send:hover { transform: translateY(-1px); }
 .mic:disabled { opacity: 0.4; cursor: not-allowed; }
 .mic.listening { background: var(--green); border-color: transparent; animation: pulse 1s infinite; }

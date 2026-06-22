@@ -5,10 +5,15 @@ An AI voice + avatar coach that helps sellers get up to speed selling the **enti
 ![Hubble live](hubble-live.png)
 
 ## What it does
-- **Deep expert** — answers on every GitHub product, **pricing in USD / GBP / EUR**, and licensing rules, **grounded in a knowledge base with citations**.
-- **Researcher** — synthesises and explains tricky concepts (e.g. the *active committer* model) with sources.
-- **Coach** — asks you qualifying questions, hands you customer discovery questions, positioning, objection handling and a next step.
+- **Strictly GitHub-only** — Hubble answers only on GitHub products, pricing, licensing and selling. Anything off-topic gets a friendly redirect with example questions to ask instead.
+- **Greets you by name** — when a conversation starts, Hubble asks your first name and uses it throughout.
+- **Conversational, spoken style** — short, get-to-the-point answers (no monologues); Hubble offers to expand rather than dumping detail.
+- **Coaches around the answer** — explains the surrounding GitHub context and customer impact, and proactively asks for customer/deal context to tailor pricing, discovery questions, positioning and next steps.
+- **Deep expert** — every GitHub product, **pricing in USD / GBP / EUR**, and licensing, **grounded in a knowledge base with citations**.
 - **Voice assistant on/off** — toggle a live, lip‑synced **talking avatar** that speaks Hubble's replies.
+- **Barge-in** — typing or talking instantly stops the avatar mid-sentence and refocuses on the new question (thread keeps context).
+- **Stop button** — a red ⏹ Stop appears while Hubble is speaking to silence the avatar on demand.
+- **Hands the mic back** — after Hubble finishes speaking, the mic re-opens automatically so you can just talk.
 - **Avatar choice** — switch between a **female (Lisa)** and **male (Harry)** avatar, each with a selectable neural **voice** (British / US / Australian).
 - **Type or talk** — full text chat plus a **microphone** (speech‑to‑text) input.
 
@@ -54,6 +59,7 @@ Backend (server.mjs, Express, Node)
 ```powershell
 npm install
 npm run setup     # one‑time: creates the agent + vector store, writes AGENT_ID to .env
+npm run update    # re‑apply Hubble's instructions/persona to the existing agent (after edits)
 npm start         # serves http://localhost:3000
 ```
 Then open **http://localhost:3000**, ask a question, and click **Voice assistant: Off → On** to bring the avatar to life. Use the **Female/Male** toggle and **Voice** dropdown to change the presenter. Click the **🎙️** to talk.

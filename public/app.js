@@ -7,6 +7,7 @@ const els = {
   input: document.getElementById("input"),
   sendBtn: document.getElementById("sendBtn"),
   micBtn: document.getElementById("micBtn"),
+  stopBtn: document.getElementById("stopBtn"),
   voiceToggle: document.getElementById("voiceToggle"),
   voiceToggleLbl: document.querySelector("#voiceToggle .lbl b"),
   genderSeg: document.getElementById("genderSeg"),
@@ -33,6 +34,12 @@ const state = {
   avatarLive: false,
   recognizer: null,
   listening: false,
+  speaking: false,
+  stoppedManually: false,
+  busy: false,
+  pendingText: null,
+  userName: null,
+  greeted: false,
 };
 
 // ---------- helpers ----------
@@ -86,12 +93,25 @@ function addTyping() {
 }
 
 // ---------- chat ----------
+// Serialized: the Foundry thread allows only one active run at a time, so we
+// never fire a second /api/chat while one is in flight. A new message that
+// arrives mid-run is held as the single pending item and sent when the run ends.
 async function sendMessage(text) {
   text = (text || "").trim();
   if (!text) return;
+  // Barge-in: a new question (typed or spoken) interrupts the avatar mid-sentence
+  // and refocuses on what was just asked — context is preserved by the thread.
+  interruptAvatar();
+  stopListening();
   addMessage("user", text);
   els.input.value = "";
   els.input.style.height = "auto";
+  if (state.busy) { state.pendingText = text; return; } // queue until current run finishes
+  runChat(text);
+}
+
+async function runChat(text) {
+  state.busy = true;
   const typing = addTyping();
   els.sendBtn.disabled = true;
   try {
@@ -113,9 +133,24 @@ async function sendMessage(text) {
     typing.remove();
     addMessage("bot", "⚠️ Network error: " + err.message);
   } finally {
+    state.busy = false;
     els.sendBtn.disabled = false;
     els.input.focus();
+    // Send whatever the user queued while we were busy.
+    if (state.pendingText) {
+      const next = state.pendingText;
+      state.pendingText = null;
+      runChat(next);
+    }
   }
+}
+
+// First-contact greeting: Hubble introduces itself and asks the seller's name,
+// then (via speak → auto-listen) opens the mic so they can just answer aloud.
+function kickoffGreeting() {
+  if (state.greeted) return;
+  state.greeted = true;
+  runChat("[SYSTEM: The seller just turned on voice mode and hasn't spoken yet. Greet them warmly in one or two short sentences and ask their first name. Don't cover anything else yet.]");
 }
 
 // Strip citation markers / markdown so the avatar speaks naturally
@@ -129,18 +164,43 @@ function speakable(text) {
     .trim();
 }
 
+// Stop the avatar talking immediately (barge-in or manual Stop button).
+// `manual` = true means the user clicked Stop, so don't auto-reopen the mic.
+function interruptAvatar(manual) {
+  if (manual) state.stoppedManually = true;
+  if (state.avatarSynth && state.speaking) {
+    try { state.avatarSynth.stopSpeakingAsync(); } catch (e) { /* ignore */ }
+  }
+  state.speaking = false;
+  els.speakingBar.classList.remove("on");
+  els.stopBtn.hidden = true;
+}
+
 async function speak(text) {
   if (!state.avatarSynth) return;
+  interruptAvatar(); // clear any in-flight speech first
+  state.stoppedManually = false;
   const ssml =
     `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">` +
     `<voice name="${state.voice}">${escapeXml(speakable(text))}</voice></speak>`;
   els.speakingBar.classList.add("on");
+  els.stopBtn.hidden = false;
+  state.speaking = true;
   try {
     await state.avatarSynth.speakSsmlAsync(ssml);
   } catch (e) {
     console.warn("speak failed", e);
   } finally {
+    state.speaking = false;
     els.speakingBar.classList.remove("on");
+    els.stopBtn.hidden = true;
+    // Hand the conversation back: re-open the mic so the user can just talk —
+    // unless the user pressed Stop (they chose silence).
+    if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually) {
+      setTimeout(() => {
+        if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually) startListening();
+      }, 450);
+    }
   }
 }
 
@@ -209,6 +269,8 @@ function stopAvatar() {
   els.video.srcObject = null;
   els.idle.classList.remove("hide");
   els.speakingBar.classList.remove("on");
+  els.stopBtn.hidden = true;
+  state.speaking = false;
   setStatus("offline");
 }
 
@@ -222,7 +284,8 @@ async function setVoiceOn(on) {
       toast("Waking Hubble's avatar… this can take a few seconds.");
       await startAvatar();
       els.micBtn.disabled = false;
-      toast("Voice assistant is live. Click the mic to talk, or just type.");
+      toast("Voice assistant is live. Hubble will say hello — just talk back.");
+      kickoffGreeting(); // greet + ask name, then auto-open the mic
     } catch (e) {
       console.error(e);
       toast("Couldn't start the avatar: " + e.message);
@@ -241,6 +304,8 @@ async function setVoiceOn(on) {
 // ---------- speech-to-text ----------
 async function startListening() {
   if (state.listening) return stopListening();
+  // Starting to talk interrupts the avatar mid-speech (barge-in)
+  interruptAvatar();
   if (!state.speechConfig) await refreshToken();
   const audioConfig = SDK.AudioConfig.fromDefaultMicrophoneInput();
   const rec = new SDK.SpeechRecognizer(state.speechConfig, audioConfig);
@@ -308,6 +373,7 @@ async function init() {
   });
   els.voiceToggle.addEventListener("click", () => setVoiceOn(!state.voiceOn));
   els.micBtn.addEventListener("click", startListening);
+  els.stopBtn.addEventListener("click", () => interruptAvatar(true));
   els.genderSeg.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-gender]");
     if (b) setGender(b.dataset.gender);

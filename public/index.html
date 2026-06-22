@@ -57,7 +57,7 @@
       <div class="messages" id="messages">
         <div class="msg bot welcome">
           <div class="bubble">
-            <p>👋 Hi, I'm <b>Hubble</b> — your GitHub sales coach. Ask me about <b>any GitHub product</b>, pricing in multiple currencies, licensing rules, or let me coach you for a customer meeting.</p>
+            <p>👋 Hey, I'm <b>Hubble</b> — your GitHub sales coach. <b>What's your name?</b> Then ask me about <b>any GitHub product</b>, pricing in multiple currencies, licensing, or let me coach you for a customer meeting.</p>
             <div class="chips">
               <button class="chip">Price 200 Copilot seats in USD &amp; GBP</button>
               <button class="chip">Coach me for a CISO meeting</button>
@@ -70,6 +70,7 @@
 
       <form class="composer" id="composer">
         <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled>🎙️</button>
+        <button type="button" class="stop" id="stopBtn" title="Stop Hubble speaking" hidden>⏹ Stop</button>
         <textarea id="input" rows="1" placeholder="Ask Hubble anything about selling GitHub…"></textarea>
         <button type="submit" class="send" id="sendBtn" title="Send">➤</button>
       </form>

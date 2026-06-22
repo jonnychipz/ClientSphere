@@ -6,6 +6,7 @@
   "main": "server.mjs",
   "scripts": {
     "setup": "node setup-agent.mjs",
+    "update": "node update-agent.mjs",
     "start": "node server.mjs",
     "dev": "node --watch server.mjs"
   },
