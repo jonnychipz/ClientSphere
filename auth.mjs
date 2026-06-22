@@ -42,12 +42,12 @@ export function parseCookies(req) {
   });
   return out;
 }
-export function setSession(res, login) {
+export function setSession(res, login, secure) {
   const token = sign({ login, iat: Math.floor(Date.now() / 1000) });
-  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${MAX_AGE}`);
+  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax;${secure ? " Secure;" : ""} Max-Age=${MAX_AGE}`);
 }
-export function clearSession(res) {
-  res.setHeader("Set-Cookie", `${COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+export function clearSession(res, secure) {
+  res.setHeader("Set-Cookie", `${COOKIE}=; HttpOnly; Path=/; SameSite=Lax;${secure ? " Secure;" : ""} Max-Age=0`);
 }
 export function sessionLogin(req) {
   const obj = verify(parseCookies(req)[COOKIE]);
@@ -56,8 +56,8 @@ export function sessionLogin(req) {
 
 // ---------- OAuth state (CSRF) ----------
 export function makeState() { return crypto.randomBytes(16).toString("hex"); }
-export function setStateCookie(res, state) {
-  res.setHeader("Set-Cookie", `hubble_oauth_state=${state}; HttpOnly; Path=/; SameSite=Lax; Max-Age=600`);
+export function setStateCookie(res, state, secure) {
+  res.setHeader("Set-Cookie", `hubble_oauth_state=${state}; HttpOnly; Path=/; SameSite=Lax;${secure ? " Secure;" : ""} Max-Age=600`);
 }
 export function checkState(req, state) {
   return state && parseCookies(req).hubble_oauth_state === state;

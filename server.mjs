@@ -134,6 +134,7 @@ const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarCha
   : null;
 
 const app = express();
+app.set("trust proxy", 1); // App Service terminates TLS at a proxy; trust X-Forwarded-Proto/Host
 app.use(express.json({ limit: "1mb" }));
 
 // ---------------- Authentication & access control ----------------
@@ -175,7 +176,7 @@ app.use(express.static(path.join(__dirname, "public"), { index: false }));
 app.get("/auth/login", (req, res) => {
   if (DEV_MODE) return res.redirect("/login?dev=1");
   const state = makeState();
-  setStateCookie(res, state);
+  setStateCookie(res, state, req.secure);
   res.redirect(authorizeUrl(state, redirectUri(req)));
 });
 
@@ -186,7 +187,7 @@ app.get("/auth/callback", async (req, res) => {
     const token = await exchangeCode(code, redirectUri(req));
     const gh = await fetchGitHubUser(token);
     const user = upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
-    setSession(res, user.login);
+    setSession(res, user.login, req.secure);
     logUsage(user.login, "login");
     res.redirect("/");
   } catch (err) {
@@ -201,12 +202,14 @@ app.post("/auth/dev", (req, res) => {
   const login = (req.body?.login || "").trim();
   if (!/^[a-zA-Z0-9-]{1,39}$/.test(login)) return res.status(400).json({ error: "Enter a valid GitHub username" });
   const user = upsertUser({ login, name: login }, isAdmin(login) ? "approved" : "pending");
-  setSession(res, user.login);
+  setSession(res, user.login, req.secure);
   logUsage(user.login, "login", "dev");
   res.json({ ok: true, status: user.status });
 });
 
-app.get("/auth/logout", (req, res) => { clearSession(res); res.redirect("/login"); });
+app.get("/auth/logout", (req, res) => { clearSession(res, req.secure); res.redirect("/login"); });
+
+app.get("/api/authmode", (req, res) => res.json({ devMode: DEV_MODE }));
 
 app.get("/api/me", (req, res) => {
   const u = resolveUser(req);

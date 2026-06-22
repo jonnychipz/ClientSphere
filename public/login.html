@@ -35,8 +35,11 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    if (params.get("dev") === "1") document.getElementById("devPanel").hidden = false;
+    // Only reveal the dev-login panel if the SERVER is actually in dev mode
+    // (no real OAuth App configured). In production it stays hidden.
+    fetch("/api/authmode").then((r) => r.json()).then((m) => {
+      if (m.devMode) document.getElementById("devPanel").hidden = false;
+    }).catch(() => {});
     document.getElementById("devForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const login = document.getElementById("devLogin").value.trim();
