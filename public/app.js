@@ -74,6 +74,7 @@ const state = {
   gender: "female",
   voice: null,
   voiceSel: null,
+  voiceEndpointId: "",
   body: null,          // { character, style, customized?, photoModel? } paired with the chosen voice
   background: null,    // chosen background { id, label, css }
   green: "#00FF00FF",  // avatar backdrop colour we chroma-key out
@@ -331,6 +332,8 @@ async function startAvatar() {
   // background behind the avatar.
   avatarConfig.backgroundColor = state.green;
   state.speechConfig.speechSynthesisVoiceName = state.voice;
+  // Custom Neural Voices require the deployment endpoint id; standard voices must NOT have one.
+  state.speechConfig.endpointId = state.voiceEndpointId || "";
 
   const synth = new SDK.AvatarSynthesizer(state.speechConfig, avatarConfig);
   state.avatarSynth = synth;
@@ -493,16 +496,19 @@ function applySelection() {
   const c = state.cfg.custom;
   if (state.voiceSel === CUSTOM_VAL && c) {
     const fallback = state.cfg.voices[c.gender || state.gender][0];
+    // Use the custom FACE avatar if trained; otherwise the configured standard body.
     state.body = c.character
       ? { character: c.character, style: c.style || "", customized: true, photoModel: c.photoModel || "" }
-      : { character: fallback.character, style: fallback.style };
-    state.voice = c.voice || fallback.id; // your CNV, or a standard voice if none yet
+      : { character: c.bodyCharacter || fallback.character, style: c.bodyStyle || fallback.style };
+    state.voice = c.voice || fallback.id;          // your Custom Neural Voice
+    state.voiceEndpointId = c.voiceEndpointId || ""; // CNV deployment endpoint id (required for custom voices)
     return;
   }
   const v = currentVoiceObj();
   state.voiceSel = v.id;
   state.voice = v.id;
   state.body = { character: v.character, style: v.style };
+  state.voiceEndpointId = ""; // standard voices need no endpoint id
 }
 function populateVoices() {
   const list = state.cfg.voices[state.gender];

@@ -125,15 +125,20 @@ async function getSpeechToken() {
 // ---- Custom avatar + voice (your likeness), enabled via .env once trained ----
 const customAvatarChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
 const customVoiceName = (process.env.CUSTOM_VOICE_NAME || "").trim();
+const customVoiceEndpoint = (process.env.CUSTOM_VOICE_ENDPOINT_ID || "").trim();
 const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarChar || customVoiceName))
   ? {
       enabled: true,
       label: process.env.CUSTOM_AVATAR_LABEL || "You (custom)",
       gender: (process.env.CUSTOM_AVATAR_GENDER || "male").toLowerCase() === "female" ? "female" : "male",
-      character: customAvatarChar,                       // custom video/photo avatar model name
+      character: customAvatarChar,                       // custom video/photo avatar model name (your face)
       style: (process.env.CUSTOM_AVATAR_STYLE || "").trim(),
       photoModel: (process.env.CUSTOM_AVATAR_PHOTO_MODEL || "").trim(), // e.g. "vasa-1" for photo avatar
-      voice: customVoiceName,                            // your Custom Neural Voice deployment name
+      // Standard avatar body paired with the custom voice while no custom face exists yet:
+      bodyCharacter: (process.env.CUSTOM_BODY_CHARACTER || "harry").trim(),
+      bodyStyle: (process.env.CUSTOM_BODY_STYLE || "business").trim(),
+      voice: customVoiceName,                            // your Custom Neural Voice name (e.g. en-GB-JonnychipzNeural)
+      voiceEndpointId: customVoiceEndpoint,              // CNV deployment/endpoint id (required for custom voices)
     }
   : null;
 
