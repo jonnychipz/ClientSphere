@@ -743,14 +743,63 @@ async function renderUser() {
     const r = await fetch("/api/me");
     if (!r.ok) { location.href = "/login"; return; }
     const u = await r.json();
-    const adminLink = u.isAdmin ? `<a class="admin-link" href="/admin" title="Admin dashboard">Admin</a>` : "";
-    els.userChip.innerHTML =
-      `<img src="${u.avatar || "favicon.svg"}" alt="" onerror="this.src='favicon.svg'"/>` +
-      `<span class="uc-name" title="@${u.login}">${u.name || u.login}</span>` +
-      adminLink +
-      `<a href="/auth/logout">Sign out</a>`;
-    els.userChip.hidden = false;
+    state.me = u;
+    const fallback = "favicon.svg";
+    const av = u.avatar || fallback;
+    document.getElementById("profileAvatar").src = av;
+    document.getElementById("profileAvatar").onerror = function () { this.src = fallback; };
+    document.getElementById("profileName").textContent = u.name || u.login;
+
+    const usage = u.usage || { total: 0, chats: 0 };
+    const adminBadge = u.isAdmin ? '<span class="pm-badge">Admin</span>' : "";
+    const adminLink = u.isAdmin
+      ? `<a class="pm-link admin" href="/admin">${icon("roleplay", 16)}<span>Admin dashboard</span></a>` : "";
+    document.getElementById("profileMenu").innerHTML = `
+      <div class="pm-head">
+        <img src="${av}" alt="" onerror="this.src='${fallback}'"/>
+        <div>
+          <div class="pm-name">${escHtml(u.name || u.login)} ${adminBadge}</div>
+          <div class="pm-sub">@${escHtml(u.login)}</div>
+          ${u.email ? `<div class="pm-sub">${escHtml(u.email)}</div>` : ""}
+        </div>
+      </div>
+      <div class="pm-stats">
+        <div class="pm-stat"><div class="v">${usage.total || 0}</div><div class="k">Events</div></div>
+        <div class="pm-stat"><div class="v">${usage.chats || 0}</div><div class="k">Chats</div></div>
+        <div class="pm-stat"><div class="v">${u.publicRepos ?? "—"}</div><div class="k">Repos</div></div>
+      </div>
+      <div class="pm-links">
+        ${adminLink}
+        <a class="pm-link" href="${u.htmlUrl || "https://github.com/" + u.login}" target="_blank" rel="noopener noreferrer">${icon("link", 16)}<span>GitHub profile</span></a>
+        <a class="pm-link" href="/auth/logout">${icon("stop", 16)}<span>Sign out</span></a>
+        <a class="pm-link danger" id="deleteAcctLink" href="#">${icon("close", 16)}<span>Delete my account</span></a>
+      </div>`;
+    document.getElementById("profile").hidden = false;
+
+    document.getElementById("profileBtn").onclick = (e) => {
+      e.stopPropagation();
+      const m = document.getElementById("profileMenu");
+      m.hidden = !m.hidden;
+      document.getElementById("profileBtn").setAttribute("aria-expanded", String(!m.hidden));
+    };
+    document.addEventListener("click", () => { document.getElementById("profileMenu").hidden = true; });
+    document.getElementById("profileMenu").addEventListener("click", (e) => e.stopPropagation());
+    document.getElementById("deleteAcctLink").addEventListener("click", (e) => { e.preventDefault(); deleteMyAccount(); });
   } catch { /* ignore */ }
+}
+
+function escHtml(s) {
+  return (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+async function deleteMyAccount() {
+  if (!confirm("Delete your Hubble account? This removes your access and data. The admin will be notified. You can sign up again later.")) return;
+  try {
+    const r = await fetch("/api/me/delete", { method: "POST" });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || "Couldn't delete account"); return; }
+    location.href = "/login";
+  } catch (e) { toast("Network error: " + e.message); }
 }
 
 // ---------- init ----------

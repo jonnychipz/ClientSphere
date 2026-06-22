@@ -32,7 +32,7 @@
     <section class="card">
       <div class="card-head"><h2>Access requests</h2><span class="muted" id="usersMeta"></span></div>
       <div class="table-wrap"><table id="usersTable"><thead><tr>
-        <th>User</th><th>Status</th><th>Requested</th><th>Last login</th><th>Actions</th>
+        <th>User</th><th>Email</th><th>Status</th><th>Requested</th><th>Last login</th><th>Actions</th>
       </tr></thead><tbody id="usersBody"></tbody></table></div>
     </section>
 
@@ -41,6 +41,13 @@
       <div class="table-wrap"><table id="usageTable"><thead><tr>
         <th>User</th><th>Total events</th><th>Chats</th><th>Last active</th>
       </tr></thead><tbody id="usageBody"></tbody></table></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>System logs</h2><span class="muted" id="logsMeta">stored in Azure Table Storage</span></div>
+      <div class="table-wrap"><table id="logsTable"><thead><tr>
+        <th>Time</th><th>Level</th><th>Event</th><th>Detail</th>
+      </tr></thead><tbody id="logsBody"></tbody></table></div>
     </section>
 
     <section class="card">

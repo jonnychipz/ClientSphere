@@ -23,9 +23,20 @@
           <h1>HUBBLE</h1>
           <p class="tagline" id="tagline">Your AI GitHub sales coach</p>
         </div>
-        <span class="status" id="avatarStatus" title="Avatar status">offline</span>
-        <div class="user-chip" id="userChip" hidden></div>
+
+        <!-- Profile dropdown -->
+        <div class="profile" id="profile" hidden>
+          <button class="profile-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
+            <img id="profileAvatar" alt="" />
+            <span class="profile-name" id="profileName"></span>
+            <svg class="caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="profile-menu" id="profileMenu" hidden></div>
+        </div>
+
         <button class="drawer-toggle" id="drawerToggle" title="GitHub resources" aria-label="Open GitHub resources"></button>
+
+        <span class="status" id="avatarStatus" title="Avatar status">offline</span>
       </header>
 
       <div class="avatar-wrap" id="avatarWrap">

@@ -88,3 +88,11 @@ td { border-bottom-color: rgba(47,39,80,0.6); }
 .act.revoke:hover { border-color: var(--accent); }
 .feed-row .a { color: #c4b5fd; }
 .feed-row { border-bottom-color: rgba(47,39,80,0.5); }
+
+/* extra admin action buttons */
+.row-actions { flex-wrap: wrap; }
+.act.admin-make { background: linear-gradient(135deg,#a78bfa,#6d28d9); color:#fff; box-shadow:0 0 12px -4px rgba(139,92,246,.55); }
+.act.del { background: #2a1620; border:1px solid #da3633; color:#f0a3a3; }
+.act.del:hover { background:#3a1620; }
+.act.admin-make:hover { filter:brightness(1.1); }
+#logsTable td:nth-child(3){ color:#ece9f6; }

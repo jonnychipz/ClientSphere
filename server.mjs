@@ -12,12 +12,14 @@ import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 import {
   DEV_MODE, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
-  makeActionToken, verifyActionToken,
 } from "./auth.mjs";
 import {
-  getUser, upsertUser, setStatus, listUsers, logUsage, getUsage, usageStats,
+  initStore, STORAGE_MODE, getUser, upsertUser, setStatus, setAdmin, deleteUser,
+  listUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken,
 } from "./store.mjs";
-import { EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision } from "./email.mjs";
+import {
+  EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision, emailAdminAccountDeleted,
+} from "./email.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -147,28 +149,40 @@ function baseUrl(req) {
 function redirectUri(req) {
   return `${baseUrl(req)}/auth/callback`;
 }
-// Resolve the signed-in user (full record) onto req.authUser.
-function resolveUser(req) {
+const appUrlOf = (req) => process.env.PUBLIC_BASE_URL || baseUrl(req);
+
+// Effective admin = bootstrap env admin (e.g. jonnychipz) OR stored isAdmin flag.
+function effectiveAdmin(user) {
+  return !!user && (isAdmin(user.login) || user.isAdmin === true);
+}
+
+// Resolve the signed-in user (full record). Bootstrap admins are auto-provisioned + approved.
+async function resolveUser(req) {
   const login = sessionLogin(req);
   if (!login) return null;
-  // Admins are always approved, even before any decision is recorded.
-  let user = getUser(login);
-  if (!user && isAdmin(login)) user = upsertUser({ login, name: login }, "approved");
-  if (user && isAdmin(login) && user.status !== "approved") user.status = "approved";
+  let user = await getUser(login);
+  if (!user && isAdmin(login)) user = await upsertUser({ login, name: login }, "approved");
+  if (user && isAdmin(login) && (user.status !== "approved" || !user.isAdmin)) {
+    user.status = "approved"; user.isAdmin = true; await setAdmin(login, true);
+  }
   return user;
 }
-function requireApproved(req, res, next) {
-  const u = resolveUser(req);
-  if (!u) return res.status(401).json({ error: "Not signed in" });
-  if (u.status !== "approved") return res.status(403).json({ error: "Access not approved", status: u.status });
-  req.authUser = u;
-  next();
+function requireApproved(handler) {
+  return async (req, res) => {
+    const u = await resolveUser(req);
+    if (!u) return res.status(401).json({ error: "Not signed in" });
+    if (u.status !== "approved") return res.status(403).json({ error: "Access not approved", status: u.status });
+    req.authUser = u;
+    return handler(req, res);
+  };
 }
-function requireAdmin(req, res, next) {
-  const u = resolveUser(req);
-  if (!u || !isAdmin(u.login)) return res.status(403).json({ error: "Admin only" });
-  req.authUser = u;
-  next();
+function requireAdmin(handler) {
+  return async (req, res) => {
+    const u = await resolveUser(req);
+    if (!effectiveAdmin(u)) return res.status(403).json({ error: "Admin only" });
+    req.authUser = u;
+    return handler(req, res);
+  };
 }
 
 // Branded confirmation page for email one-click actions.
@@ -196,26 +210,29 @@ app.get("/auth/login", (req, res) => {
   res.redirect(authorizeUrl(state, redirectUri(req)));
 });
 
+async function startApprovalWorkflow(user, req) {
+  const appUrl = appUrlOf(req);
+  const approveTok = await createToken(user.login, "approved");
+  const denyTok = await createToken(user.login, "denied");
+  const approveUrl = `${appUrl}/admin/action?token=${encodeURIComponent(approveTok)}&d=approved`;
+  const denyUrl = `${appUrl}/admin/action?token=${encodeURIComponent(denyTok)}&d=denied`;
+  emailAdminNewUser(user, approveUrl, denyUrl, appUrl).catch((e) => console.error("admin email:", e.message));
+  emailUserPending(user, appUrl).catch((e) => console.error("user pending email:", e.message));
+  await logUsage(user.login, "signup");
+  await log("info", "New access request", `@${user.login} (${user.email || "no email"})`);
+}
+
 app.get("/auth/callback", async (req, res) => {
   try {
     const { code, state } = req.query;
     if (!checkState(req, state)) return res.status(400).send("Invalid OAuth state. <a href='/login'>Try again</a>.");
     const token = await exchangeCode(code, redirectUri(req));
     const gh = await fetchGitHubUser(token);
-    const isNew = !getUser(gh.login);
-    const user = upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
+    const isNew = !(await getUser(gh.login));
+    const user = await upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
     setSession(res, user.login, req.secure);
-    logUsage(user.login, "login");
-    // Fire the approval workflow emails for brand-new, non-admin sign-ups.
-    if (isNew && !isAdmin(user.login)) {
-      const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
-      const tok = makeActionToken(user.login);
-      const approveUrl = `${appUrl}/admin/action?token=${encodeURIComponent(tok)}&d=approved`;
-      const denyUrl = `${appUrl}/admin/action?token=${encodeURIComponent(tok)}&d=denied`;
-      emailAdminNewUser(user, approveUrl, denyUrl, appUrl).catch((e) => console.error("admin email:", e.message));
-      emailUserPending(user, appUrl).catch((e) => console.error("user pending email:", e.message));
-      logUsage(user.login, "signup");
-    }
+    await logUsage(user.login, "login");
+    if (isNew && !effectiveAdmin(user)) await startApprovalWorkflow(user, req);
     res.redirect("/");
   } catch (err) {
     console.error("oauth callback error:", err.message);
@@ -224,81 +241,126 @@ app.get("/auth/callback", async (req, res) => {
 });
 
 // Dev-mode sign-in (only when no real OAuth App is configured).
-app.post("/auth/dev", (req, res) => {
+app.post("/auth/dev", async (req, res) => {
   if (!DEV_MODE) return res.status(404).json({ error: "Dev login disabled" });
   const login = (req.body?.login || "").trim();
   if (!/^[a-zA-Z0-9-]{1,39}$/.test(login)) return res.status(400).json({ error: "Enter a valid GitHub username" });
-  const user = upsertUser({ login, name: login }, isAdmin(login) ? "approved" : "pending");
+  // Pull the real public GitHub profile (avatar etc.) so dev mode looks real.
+  let profile = { login, name: login };
+  try {
+    const r = await fetch(`https://api.github.com/users/${login}`, { headers: { "User-Agent": "Hubble", Accept: "application/vnd.github+json" } });
+    if (r.ok) { const g = await r.json(); profile = { login: g.login, name: g.name || g.login, avatar: g.avatar_url, bio: g.bio, company: g.company, location: g.location, blog: g.blog, followers: g.followers, publicRepos: g.public_repos, htmlUrl: g.html_url, githubCreatedAt: g.created_at }; }
+  } catch { /* offline ok */ }
+  const isNew = !(await getUser(login));
+  const user = await upsertUser(profile, isAdmin(login) ? "approved" : "pending");
   setSession(res, user.login, req.secure);
-  logUsage(user.login, "login", "dev");
-  res.json({ ok: true, status: user.status });
+  await logUsage(user.login, "login", "dev");
+  if (isNew && !effectiveAdmin(user)) await startApprovalWorkflow(user, req);
+  res.json({ ok: true, status: effectiveAdmin(user) ? "approved" : user.status });
 });
 
 app.get("/auth/logout", (req, res) => { clearSession(res, req.secure); res.redirect("/login"); });
 
 app.get("/api/authmode", (req, res) => res.json({ devMode: DEV_MODE }));
 
-app.get("/api/me", (req, res) => {
-  const u = resolveUser(req);
+app.get("/api/me", async (req, res) => {
+  const u = await resolveUser(req);
   if (!u) return res.status(401).json({ error: "Not signed in" });
-  res.json({ login: u.login, name: u.name, avatar: u.avatar, status: u.status, isAdmin: isAdmin(u.login) });
+  const usage = (await usageStats()).find((s) => s.login.toLowerCase() === u.login.toLowerCase()) || { total: 0, chats: 0, lastActive: null };
+  res.json({
+    login: u.login, name: u.name, avatar: u.avatar, email: u.email, status: u.status,
+    isAdmin: effectiveAdmin(u), company: u.company, location: u.location, bio: u.bio,
+    followers: u.followers, publicRepos: u.publicRepos, htmlUrl: u.htmlUrl,
+    requestedAt: u.requestedAt, usage,
+  });
 });
 
+// Self-service: delete my own account (notifies the admin).
+app.post("/api/me/delete", requireApproved(async (req, res) => {
+  const u = req.authUser;
+  if (isAdmin(u.login)) return res.status(400).json({ error: "Bootstrap admin cannot self-delete" });
+  await deleteUser(u.login);
+  await logUsage(u.login, "account-deleted", "self");
+  await log("warn", "Account self-deleted", `@${u.login} (${u.email || "no email"})`);
+  emailAdminAccountDeleted(u, appUrlOf(req)).catch((e) => console.error("delete email:", e.message));
+  clearSession(res, req.secure);
+  res.json({ ok: true });
+}));
+
 // ---- gated pages ----
-app.get("/", (req, res) => {
-  const u = resolveUser(req);
+app.get("/", async (req, res) => {
+  const u = await resolveUser(req);
   if (!u) return res.redirect("/login");
   if (u.status === "denied") return res.redirect("/denied");
-  if (u.status !== "approved") return res.redirect("/pending");
+  if (u.status !== "approved" && !effectiveAdmin(u)) return res.redirect("/pending");
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 for (const p of PUBLIC_PAGES) {
   app.get(p, (req, res) => res.sendFile(path.join(__dirname, "public", p.slice(1) + ".html")));
 }
-app.get("/admin", (req, res) => {
-  const u = resolveUser(req);
-  if (!u || !isAdmin(u.login)) return res.redirect("/login");
+app.get("/admin", async (req, res) => {
+  const u = await resolveUser(req);
+  if (!effectiveAdmin(u)) return res.redirect("/login");
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
 // ---- admin APIs ----
-app.get("/api/admin/users", requireAdmin, (req, res) => res.json({ users: listUsers(), admins: ADMIN_LOGINS }));
-app.get("/api/admin/usage", requireAdmin, (req, res) => res.json({ recent: getUsage(150), stats: usageStats() }));
-app.post("/api/admin/decide", requireAdmin, (req, res) => {
+app.get("/api/admin/users", requireAdmin(async (req, res) => {
+  const users = (await listUsers()).map((u) => ({ ...u, effectiveAdmin: effectiveAdmin(u), bootstrapAdmin: isAdmin(u.login) }));
+  res.json({ users, admins: ADMIN_LOGINS });
+}));
+app.get("/api/admin/usage", requireAdmin(async (req, res) => res.json({ recent: await getUsage(150), stats: await usageStats() })));
+app.get("/api/admin/logs", requireAdmin(async (req, res) => res.json({ logs: await getLogs(300) })));
+
+app.post("/api/admin/decide", requireAdmin(async (req, res) => {
   const { login, decision } = req.body || {};
   if (!["approved", "denied", "pending"].includes(decision)) return res.status(400).json({ error: "bad decision" });
-  if (isAdmin(login)) return res.status(400).json({ error: "Cannot change an admin's access" });
-  const u = setStatus(login, decision, req.authUser.login);
+  if (isAdmin(login)) return res.status(400).json({ error: "Cannot change a bootstrap admin's access" });
+  const u = await setStatus(login, decision, req.authUser.login);
   if (!u) return res.status(404).json({ error: "user not found" });
-  logUsage(req.authUser.login, "decide", `${login} -> ${decision}`);
-  if (decision === "approved" || decision === "denied") {
-    const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
-    emailUserDecision(u, decision, appUrl).catch((e) => console.error("decision email:", e.message));
-  }
+  await logUsage(req.authUser.login, "decide", `${login} -> ${decision}`);
+  await log("info", `Access ${decision}`, `@${login} by @${req.authUser.login}`);
+  if (decision === "approved" || decision === "denied") emailUserDecision(u, decision, appUrlOf(req)).catch((e) => console.error("decision email:", e.message));
   res.json({ ok: true, user: u });
-});
+}));
 
-// One-click Approve/Deny from the admin's email (signed, expiring token).
-app.get("/admin/action", (req, res) => {
+app.post("/api/admin/delete", requireAdmin(async (req, res) => {
+  const { login } = req.body || {};
+  if (isAdmin(login)) return res.status(400).json({ error: "Cannot delete a bootstrap admin" });
+  const ok = await deleteUser(login);
+  if (!ok) return res.status(404).json({ error: "user not found" });
+  await log("warn", "Account deleted by admin", `@${login} by @${req.authUser.login}`);
+  res.json({ ok: true });
+}));
+
+app.post("/api/admin/set-admin", requireAdmin(async (req, res) => {
+  const { login, makeAdmin } = req.body || {};
+  if (isAdmin(login)) return res.status(400).json({ error: "That account is a permanent bootstrap admin" });
+  const u = await setAdmin(login, !!makeAdmin);
+  if (!u) return res.status(404).json({ error: "user not found" });
+  await log("info", makeAdmin ? "Promoted to admin" : "Admin removed", `@${login} by @${req.authUser.login}`);
+  res.json({ ok: true, user: { ...u, effectiveAdmin: effectiveAdmin(u) } });
+}));
+
+// One-click Approve/Deny from the admin's email — SINGLE-USE signed token.
+app.get("/admin/action", async (req, res) => {
   const { token, d } = req.query;
   const decision = d === "approved" ? "approved" : d === "denied" ? "denied" : null;
-  const login = verifyActionToken(token);
   const fail = (msg) => res.status(400).send(actionPage("Link problem", msg, false));
   if (!decision) return fail("That link is missing a valid decision.");
-  if (!login) return fail("This link is invalid or has expired. Use the admin dashboard instead.");
+  // Consume the single-use token; it must match the decision and be unused.
+  const consumed = await consumeToken(token, decision);
+  if (!consumed) return fail("This link is invalid, already used, or expired. Use the admin dashboard instead.");
+  const login = consumed.login;
   if (isAdmin(login)) return fail("That account is an admin and can't be changed.");
-  const u = getUser(login);
+  const u = await getUser(login);
   if (!u) return fail("That user no longer exists.");
-  setStatus(login, decision, "email-link");
-  logUsage("email-link", "decide", `${login} -> ${decision}`);
-  const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
-  emailUserDecision(u, decision, appUrl).catch((e) => console.error("decision email:", e.message));
+  await setStatus(login, decision, "email-link");
+  await logUsage("email-link", "decide", `${login} -> ${decision}`);
+  await log("info", `Access ${decision} (email link)`, `@${login}`);
+  emailUserDecision(u, decision, appUrlOf(req)).catch((e) => console.error("decision email:", e.message));
   const word = decision === "approved" ? "approved" : "denied";
-  res.send(actionPage(
-    `Access ${word}`,
-    `<b>@${login}</b> has been <b>${word}</b>${u.email ? ` and notified at ${u.email}` : ""}.`,
-    true
-  ));
+  res.send(actionPage(`Access ${word}`, `<b>@${login}</b> has been <b>${word}</b>${u.email ? ` and notified at ${u.email}` : ""}.`, true));
 });
 
 app.get("/api/config", (req, res) => {
@@ -314,7 +376,7 @@ app.get("/api/config", (req, res) => {
   });
 });
 
-app.get("/api/speech-token", requireApproved, async (req, res) => {
+app.get("/api/speech-token", requireApproved(async (req, res) => {
   try {
     const t = await getSpeechToken();
     res.json({ token: t.value, region: SPEECH_REGION, expiresOn: t.expiresOnMs });
@@ -322,10 +384,10 @@ app.get("/api/speech-token", requireApproved, async (req, res) => {
     console.error("speech-token error:", err.message);
     res.status(500).json({ error: "Could not mint speech token", detail: err.message });
   }
-});
+}));
 
 // Server-side relay (ICE) token for the real-time avatar WebRTC peer connection.
-app.get("/api/relay-token", requireApproved, async (req, res) => {
+app.get("/api/relay-token", requireApproved(async (req, res) => {
   try {
     const t = await getSpeechToken();
     const url = `https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`;
@@ -339,7 +401,7 @@ app.get("/api/relay-token", requireApproved, async (req, res) => {
     console.error("relay-token error:", err.message);
     res.status(500).json({ error: "Could not get relay token", detail: err.message });
   }
-});
+}));
 
 // Extract assistant text + citations from the latest assistant message
 function renderAssistantMessage(msg) {
@@ -398,7 +460,7 @@ async function runAgent(tid) {
   return run;
 }
 
-app.post("/api/chat", requireApproved, async (req, res) => {
+app.post("/api/chat", requireApproved(async (req, res) => {
   const { message, threadId } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   try {
@@ -422,12 +484,14 @@ app.post("/api/chat", requireApproved, async (req, res) => {
     console.error("chat error:", err);
     res.status(500).json({ error: "Chat failed", detail: err.message });
   }
-});
+}));
 
+await initStore();
 app.listen(PORT, () => {
   console.log(`\n🛰  Hubble running at http://localhost:${PORT}`);
   console.log(`   Agent: ${AGENT_ID}`);
   console.log(`   Speech region: ${SPEECH_REGION} (keyless AAD)`);
   console.log(`   Auth: ${DEV_MODE ? "DEV MODE (no OAuth App) — simulated GitHub login" : "GitHub OAuth"} | admins: ${ADMIN_LOGINS.join(", ")}`);
-  console.log(`   Email: ${EMAIL_ENABLED ? "ACS enabled" : "disabled (no ACS config)"}\n`);
+  console.log(`   Email: ${EMAIL_ENABLED ? "ACS enabled" : "disabled (no ACS config)"}`);
+  console.log(`   Storage mode: ${STORAGE_MODE}\n`);
 });

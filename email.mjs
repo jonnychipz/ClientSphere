@@ -147,3 +147,12 @@ export async function emailUserDecision(user, decision, appUrl) {
     p("If you think this was a mistake or your situation changes, just reach out to the contact below and we'll take another look.");
   return send(user.email, "Hubble · access request update", shell(inner, "An update on your Hubble access request"));
 }
+
+// ---------- admin: a user deleted their own account ----------
+export async function emailAdminAccountDeleted(user, appUrl) {
+  const inner = h("Account deleted") +
+    p(`<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} just <strong style="color:#f0a35e;">deleted their account</strong> and removed their data from Hubble.`) +
+    p(`<span style="font-size:13px;color:#9a92b8;">Email: ${user.email ? esc(user.email) : "private"} · they can sign up again any time and you'll be notified to review.</span>`) +
+    `<div style="margin:6px 0 4px;">${btn(appUrl + "/admin", "Open admin dashboard", "secondary")}</div>`;
+  return send(ADMIN_EMAIL, `Hubble · @${user.login} deleted their account`, shell(inner, `@${user.login} deleted their Hubble account`));
+}
