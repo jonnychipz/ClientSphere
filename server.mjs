@@ -82,22 +82,22 @@ const BACKGROUNDS = [
 // Key GitHub (and Microsoft) resources surfaced in the hideaway drawer.
 const RESOURCES = [
   { group: "Products & pricing", links: [
-    { icon: "💷", title: "GitHub Pricing", sub: "Plans & list prices", url: "https://github.com/pricing" },
-    { icon: "🤖", title: "GitHub Copilot", sub: "Features & plans", url: "https://github.com/features/copilot" },
-    { icon: "🛡️", title: "Advanced Security", sub: "Secret Protection & Code Security", url: "https://github.com/security/advanced-security" },
-    { icon: "🏢", title: "GitHub Enterprise", sub: "Cloud & Server", url: "https://github.com/enterprise" },
+    { icon: "tag", title: "GitHub Pricing", sub: "Plans & list prices", url: "https://github.com/pricing" },
+    { icon: "cpu", title: "GitHub Copilot", sub: "Features & plans", url: "https://github.com/features/copilot" },
+    { icon: "shield", title: "Advanced Security", sub: "Secret Protection & Code Security", url: "https://github.com/security/advanced-security" },
+    { icon: "building", title: "GitHub Enterprise", sub: "Cloud & Server", url: "https://github.com/enterprise" },
   ]},
   { group: "Documentation", links: [
-    { icon: "📚", title: "GitHub Docs", sub: "docs.github.com", url: "https://docs.github.com" },
-    { icon: "📘", title: "Copilot Docs", sub: "Setup, plans & billing", url: "https://docs.github.com/copilot" },
-    { icon: "💳", title: "Billing & Licensing", sub: "How billing works", url: "https://docs.github.com/billing" },
-    { icon: "🎓", title: "Microsoft Learn — GitHub", sub: "learn.microsoft.com", url: "https://learn.microsoft.com/training/github/" },
+    { icon: "book", title: "GitHub Docs", sub: "docs.github.com", url: "https://docs.github.com" },
+    { icon: "book-open", title: "Copilot Docs", sub: "Setup, plans & billing", url: "https://docs.github.com/copilot" },
+    { icon: "card", title: "Billing & Licensing", sub: "How billing works", url: "https://docs.github.com/billing" },
+    { icon: "award", title: "Microsoft Learn — GitHub", sub: "learn.microsoft.com", url: "https://learn.microsoft.com/training/github/" },
   ]},
   { group: "Sell & stay current", links: [
-    { icon: "🏆", title: "Customer Stories", sub: "Proof points", url: "https://github.com/customer-stories" },
-    { icon: "🔒", title: "GitHub Trust Center", sub: "Security & compliance", url: "https://github.com/trust-center" },
-    { icon: "🗺️", title: "Public Roadmap", sub: "What's coming", url: "https://github.com/orgs/github/projects/4247" },
-    { icon: "📰", title: "Changelog", sub: "Latest releases", url: "https://github.blog/changelog/" },
+    { icon: "star", title: "Customer Stories", sub: "Proof points", url: "https://github.com/customer-stories" },
+    { icon: "lock", title: "GitHub Trust Center", sub: "Security & compliance", url: "https://github.com/trust-center" },
+    { icon: "map", title: "Public Roadmap", sub: "What's coming", url: "https://github.com/orgs/github/projects/4247" },
+    { icon: "rss", title: "Changelog", sub: "Latest releases", url: "https://github.blog/changelog/" },
   ]},
 ];
 

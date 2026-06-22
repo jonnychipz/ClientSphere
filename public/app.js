@@ -1,6 +1,37 @@
 // app.js — Hubble client: chat + real-time talking avatar + speech-to-text.
 const SDK = window.SpeechSDK;
 
+// ---- Monochrome purple icon set (stroke = currentColor) ----
+const ICON_PATHS = {
+  roleplay: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  roi: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  recap: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>',
+  stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  menu: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  cpu: '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="5"/><line x1="15" y1="2" x2="15" y2="5"/><line x1="9" y1="19" x2="9" y2="22"/><line x1="15" y1="19" x2="15" y2="22"/><line x1="2" y1="9" x2="5" y2="9"/><line x1="2" y1="15" x2="5" y2="15"/><line x1="19" y1="9" x2="22" y2="9"/><line x1="19" y1="15" x2="22" y2="15"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  building: '<rect x="4" y="2" width="16" height="20" rx="1"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><path d="M9 22v-4h6v4"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  "book-open": '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  card: '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+  award: '<circle cx="12" cy="8" r="6"/><path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>',
+  rss: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+};
+function icon(name, size = 18) {
+  const p = ICON_PATHS[name] || ICON_PATHS.link;
+  return `<svg class="ic" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+}
+
 const els = {
   messages: document.getElementById("messages"),
   composer: document.getElementById("composer"),
@@ -583,7 +614,7 @@ function renderResources() {
       a.href = l.url;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
-      a.innerHTML = `<span class="dl-ico">${l.icon}</span><span><span class="dl-title">${l.title}</span><span class="dl-sub">${l.sub}</span></span>`;
+      a.innerHTML = `<span class="dl-ico">${icon(l.icon, 18)}</span><span><span class="dl-title">${l.title}</span><span class="dl-sub">${l.sub}</span></span>`;
       els.drawerLinks.appendChild(a);
     });
   });
@@ -616,7 +647,7 @@ function startRoleplay() {
     `The seller is pitching ${product}. Be ${difficulty}. Stay fully in character as the customer, speak in first person, ` +
     `react realistically, raise objections, and ask pointed questions. Keep each turn short and conversational. ` +
     `Do NOT coach or break character until you receive [[ROLEPLAY_SCORE]]. Open with a brief, in-character greeting that sets the scene.`;
-  dispatch(directive, { userText: `🎭 Starting roleplay — ${personaLabel}` });
+  dispatch(directive, { userText: `Starting roleplay — ${personaLabel}` });
 }
 function endRoleplayAndScore() {
   if (!state.roleplayActive) return;
@@ -626,7 +657,7 @@ function endRoleplayAndScore() {
     `[[ROLEPLAY_SCORE]] Roleplay over — break character and become Hubble the coach again. Score the seller's performance ` +
     `in this roleplay. Give a short scorecard with ratings out of 5 for: Discovery, Value & positioning, Objection handling, ` +
     `and Next-step / close. Then 2–3 specific things they did well and 2–3 concrete improvements. Keep it punchy and encouraging.`;
-  dispatch(directive, { userText: "🎯 End & score me" });
+  dispatch(directive, { userText: "End & score me" });
 }
 
 // ---------- ROI calculator ----------
@@ -668,7 +699,7 @@ function roiCoachPrompt() {
     `assuming a ${Math.round(r.uplift * 100)}% productivity uplift on a ${SYM[r.cur]}${Math.round(r.salary * (FX[r.cur] || 1)).toLocaleString()} average developer salary. ` +
     `That's ${fmtMoney(r.annualCost, r.cur)}/yr cost vs ${fmtMoney(r.annualValue, r.cur)}/yr value (${r.roiX.toFixed(1)}× ROI). ` +
     `Coach me on how to present this business case to the customer — what to emphasise, what to validate, and the next step.`;
-  dispatch(msg, { userText: "🧮 Coach my ROI business case" });
+  dispatch(msg, { userText: "Coach my ROI business case" });
 }
 
 // ---------- Session recap ----------
@@ -723,8 +754,20 @@ async function renderUser() {
 }
 
 // ---------- init ----------
+function paintIcons() {
+  els.roleplayBtn.innerHTML = icon("roleplay") + "<span>Roleplay</span>";
+  els.roiBtn.innerHTML = icon("roi") + "<span>ROI</span>";
+  els.recapBtn.innerHTML = icon("recap") + "<span>Recap</span>";
+  document.getElementById("aboutBtn").innerHTML = icon("info") + "<span>About</span>";
+  els.micBtn.innerHTML = icon("mic", 20);
+  els.stopBtn.innerHTML = icon("stop", 16) + "<span>Stop</span>";
+  els.sendBtn.innerHTML = icon("send", 18);
+  els.drawerToggle.innerHTML = icon("menu", 20);
+}
+
 async function init() {
   if (!SDK) { toast("Speech SDK failed to load."); }
+  paintIcons();
   renderUser();
   const r = await fetch("/api/config");
   state.cfg = await r.json();
@@ -764,6 +807,7 @@ async function init() {
   els.roleplayBtn.addEventListener("click", () => openModal("roleplayModal", true));
   els.roiBtn.addEventListener("click", () => { openModal("roiModal", true); computeRoi(); });
   els.recapBtn.addEventListener("click", openRecap);
+  document.getElementById("aboutBtn").addEventListener("click", () => openModal("aboutModal", true));
   els.roleplayEndBtn.addEventListener("click", endRoleplayAndScore);
   document.getElementById("rpStartBtn").addEventListener("click", startRoleplay);
   document.getElementById("roiCoachBtn").addEventListener("click", roiCoachPrompt);

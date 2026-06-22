@@ -25,7 +25,7 @@
         </div>
         <span class="status" id="avatarStatus" title="Avatar status">offline</span>
         <div class="user-chip" id="userChip" hidden></div>
-        <button class="drawer-toggle" id="drawerToggle" title="GitHub resources" aria-label="Open GitHub resources">☰</button>
+        <button class="drawer-toggle" id="drawerToggle" title="GitHub resources" aria-label="Open GitHub resources"></button>
       </header>
 
       <div class="avatar-wrap" id="avatarWrap">
@@ -69,9 +69,10 @@
     <!-- Right: chat -->
     <section class="chat">
       <div class="chat-toolbar">
-        <button type="button" class="tool-btn" id="roleplayBtn" title="Practice your pitch">🎭 Roleplay</button>
-        <button type="button" class="tool-btn" id="roiBtn" title="Build a business case">🧮 ROI</button>
-        <button type="button" class="tool-btn" id="recapBtn" title="Summarise this session">📋 Recap</button>
+        <button type="button" class="tool-btn" id="roleplayBtn" title="Practice your pitch">Roleplay</button>
+        <button type="button" class="tool-btn" id="roiBtn" title="Build a business case">ROI</button>
+        <button type="button" class="tool-btn" id="recapBtn" title="Summarise this session">Recap</button>
+        <button type="button" class="tool-btn" id="aboutBtn" title="About Hubble">About</button>
       </div>
 
       <div class="roleplay-banner" id="roleplayBanner" hidden>
@@ -95,10 +96,10 @@
       </div>
 
       <form class="composer" id="composer">
-        <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled>🎙️</button>
-        <button type="button" class="stop" id="stopBtn" title="Stop Hubble speaking" hidden>⏹ Stop</button>
+        <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled></button>
+        <button type="button" class="stop" id="stopBtn" title="Stop Hubble speaking" hidden>Stop</button>
         <textarea id="input" rows="1" placeholder="Ask Hubble anything about selling GitHub…"></textarea>
-        <button type="submit" class="send" id="sendBtn" title="Send">➤</button>
+        <button type="submit" class="send" id="sendBtn" title="Send"></button>
       </form>
     </section>
   </div>
@@ -106,7 +107,7 @@
   <!-- Roleplay setup modal -->
   <div class="modal-scrim" id="roleplayModal" hidden>
     <div class="modal">
-      <div class="modal-head"><span>🎭 Practice roleplay</span><button class="modal-close" data-close="roleplayModal">✕</button></div>
+      <div class="modal-head"><span>Practice roleplay</span><button class="modal-close" data-close="roleplayModal">✕</button></div>
       <div class="modal-body">
         <p class="modal-intro">Hubble will play the customer. Pitch, handle objections, and run discovery — then hit <b>End &amp; score me</b> for a coaching scorecard.</p>
         <label class="fld">Who are you selling to?
@@ -141,7 +142,7 @@
   <!-- ROI calculator modal -->
   <div class="modal-scrim" id="roiModal" hidden>
     <div class="modal">
-      <div class="modal-head"><span>🧮 Copilot ROI calculator</span><button class="modal-close" data-close="roiModal">✕</button></div>
+      <div class="modal-head"><span>Copilot ROI calculator</span><button class="modal-close" data-close="roiModal">✕</button></div>
       <div class="modal-body">
         <div class="roi-grid">
           <label class="fld">Plan
@@ -181,13 +182,36 @@
   <!-- Recap modal -->
   <div class="modal-scrim" id="recapModal" hidden>
     <div class="modal">
-      <div class="modal-head"><span>📋 Session recap</span><button class="modal-close" data-close="recapModal">✕</button></div>
+      <div class="modal-head"><span>Session recap</span><button class="modal-close" data-close="recapModal">✕</button></div>
       <div class="modal-body">
         <div class="recap-out" id="recapOut">Generating your recap…</div>
         <div class="recap-actions" id="recapActions" hidden>
-          <button class="modal-cta" id="recapCopyBtn">📋 Copy</button>
-          <button class="modal-cta secondary" id="recapDownloadBtn">⬇ Download .md</button>
-          <button class="modal-cta secondary" id="recapEmailBtn">✉ Email me</button>
+          <button class="modal-cta" id="recapCopyBtn">Copy</button>
+          <button class="modal-cta secondary" id="recapDownloadBtn">Download .md</button>
+          <button class="modal-cta secondary" id="recapEmailBtn">Email me</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About modal -->
+  <div class="modal-scrim" id="aboutModal" hidden>
+    <div class="modal about-modal">
+      <div class="modal-head"><span>About Hubble</span><button class="modal-close" data-close="aboutModal">✕</button></div>
+      <div class="modal-body">
+        <p class="modal-intro">Hubble is an AI GitHub sales coach — deep product, pricing and licensing expertise plus live roleplay, ROI modelling and coaching, with a real‑time talking avatar. Built on Azure AI Foundry (GPT‑5.4).</p>
+        <div class="about-dev" id="aboutDev">
+          <img id="aboutAvatar" alt="John Lunn" src="https://avatars.githubusercontent.com/u/55880472?v=4" />
+          <div class="about-meta">
+            <div class="about-label">Developed by</div>
+            <div class="about-name">John Lunn</div>
+            <div class="about-role">Azure Specialist · Microsoft · Wales, UK</div>
+            <div class="about-links">
+              <a href="mailto:johnlunn@microsoft.com" id="aboutMail">johnlunn@microsoft.com</a>
+              <a href="https://github.com/jonnychipz" target="_blank" rel="noopener noreferrer">@jonnychipz</a>
+              <a href="https://jonnychipz.com" target="_blank" rel="noopener noreferrer">jonnychipz.com</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
