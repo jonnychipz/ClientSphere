@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hubble — Your GitHub Sales Coach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Left: avatar stage -->
+    <section class="stage">
+      <header class="brand">
+        <div class="logo">🛰️</div>
+        <div>
+          <h1>Hubble</h1>
+          <p class="tagline" id="tagline">Your GitHub sales coach</p>
+        </div>
+        <span class="status" id="avatarStatus" title="Avatar status">offline</span>
+      </header>
+
+      <div class="avatar-wrap">
+        <video id="avatarVideo" autoplay playsinline></video>
+        <audio id="avatarAudio" autoplay></audio>
+        <div class="avatar-idle" id="avatarIdle">
+          <div class="orb"></div>
+          <p>Turn on the voice assistant to bring Hubble to life</p>
+        </div>
+        <div class="speaking-bar" id="speakingBar"><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+
+      <div class="controls">
+        <button class="toggle" id="voiceToggle" role="switch" aria-checked="false">
+          <span class="dot"></span><span class="lbl">Voice assistant: <b>Off</b></span>
+        </button>
+
+        <div class="picker">
+          <label>Avatar</label>
+          <div class="seg" id="genderSeg">
+            <button data-gender="female" class="active">Female</button>
+            <button data-gender="male">Male</button>
+          </div>
+        </div>
+
+        <div class="picker">
+          <label for="voiceSelect">Voice</label>
+          <select id="voiceSelect"></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: chat -->
+    <section class="chat">
+      <div class="messages" id="messages">
+        <div class="msg bot welcome">
+          <div class="bubble">
+            <p>👋 Hi, I'm <b>Hubble</b> — your GitHub sales coach. Ask me about <b>any GitHub product</b>, pricing in multiple currencies, licensing rules, or let me coach you for a customer meeting.</p>
+            <div class="chips">
+              <button class="chip">Price 200 Copilot seats in USD &amp; GBP</button>
+              <button class="chip">Coach me for a CISO meeting</button>
+              <button class="chip">Explain the active committer model</button>
+              <button class="chip">Business vs Enterprise Copilot?</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <form class="composer" id="composer">
+        <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled>🎙️</button>
+        <textarea id="input" rows="1" placeholder="Ask Hubble anything about selling GitHub…"></textarea>
+        <button type="submit" class="send" id="sendBtn" title="Send">➤</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

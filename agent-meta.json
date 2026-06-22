@@ -1,0 +1,13 @@
+{
+  "agentId": "asst_XEL0IWryGTPUg1aiIXFg9uSZ",
+  "vectorStoreId": "vs_HgPu2UGiVoFEgRpOW4JnEvWL",
+  "model": "gpt-5.4",
+  "fileMap": {
+    "assistant-RXLepdtGc59NTvKbYbYpaf": "01-products-overview.md",
+    "assistant-HvzZjjigH3Gi6rMy2qbPG2": "02-pricing-multicurrency.md",
+    "assistant-7CPoXKZw2QYqAhNph8sCyd": "03-licensing.md",
+    "assistant-X839io3i7JeaW5Qd66ApuG": "04-copilot-deep-dive.md",
+    "assistant-SAVfggt6oqmjgEZRkzV45m": "05-sales-coaching-playbook.md"
+  },
+  "createdAt": "2026-06-22T16:38:35.096Z"
+}
