@@ -31,9 +31,21 @@ export function getUser(login) {
 export function upsertUser(profile, defaultStatus = "pending") {
   const key = profile.login.toLowerCase();
   const existing = db.users[key];
+  const extra = {
+    email: profile.email ?? null,
+    bio: profile.bio ?? "",
+    company: profile.company ?? "",
+    location: profile.location ?? "",
+    blog: profile.blog ?? "",
+    followers: profile.followers ?? 0,
+    publicRepos: profile.publicRepos ?? 0,
+    htmlUrl: profile.htmlUrl ?? `https://github.com/${profile.login}`,
+    githubCreatedAt: profile.githubCreatedAt ?? null,
+  };
   if (existing) {
     existing.name = profile.name ?? existing.name;
     existing.avatar = profile.avatar ?? existing.avatar;
+    for (const [k, v] of Object.entries(extra)) if (v !== null && v !== "" && v !== 0) existing[k] = v;
     existing.lastLoginAt = new Date().toISOString();
     save();
     return existing;
@@ -42,6 +54,7 @@ export function upsertUser(profile, defaultStatus = "pending") {
     login: profile.login,
     name: profile.name || profile.login,
     avatar: profile.avatar || "",
+    ...extra,
     status: defaultStatus,
     requestedAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),

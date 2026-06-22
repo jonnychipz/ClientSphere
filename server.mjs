@@ -12,10 +12,12 @@ import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 import {
   DEV_MODE, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
+  makeActionToken, verifyActionToken,
 } from "./auth.mjs";
 import {
   getUser, upsertUser, setStatus, listUsers, logUsage, getUsage, usageStats,
 } from "./store.mjs";
+import { EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision } from "./email.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -169,6 +171,20 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// Branded confirmation page for email one-click actions.
+function actionPage(title, message, ok) {
+  const accent = ok ? "#a78bfa" : "#f0a35e";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hubble · ${title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 600px at 50% -10%,#241a45,#0a0813 60%);font-family:Segoe UI,Arial,sans-serif;color:#ece9f6}
+  .c{width:420px;max-width:92vw;background:linear-gradient(180deg,#16111f,#0e0a18);border:1px solid rgba(139,92,246,.38);border-radius:18px;padding:34px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 50px -14px rgba(139,92,246,.55);position:relative;overflow:hidden}
+  .c::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,#a78bfa,#8b5cf6,transparent)}
+  h1{font-family:Orbitron,Segoe UI,Arial;letter-spacing:2px;font-size:22px;margin:0 0 6px;color:${accent}}
+  p{color:#cfc8e6;font-size:14px;line-height:1.6}a{color:#a78bfa;text-decoration:none}</style></head>
+  <body><div class="c"><h1>${title}</h1><p>${message}</p>
+  <p style="margin-top:18px"><a href="/admin">Open the admin dashboard →</a></p></div></body></html>`;
+}
+
 // Static assets (css/js/images/backgrounds) are open; the HTML entry + APIs are gated.
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
@@ -186,9 +202,20 @@ app.get("/auth/callback", async (req, res) => {
     if (!checkState(req, state)) return res.status(400).send("Invalid OAuth state. <a href='/login'>Try again</a>.");
     const token = await exchangeCode(code, redirectUri(req));
     const gh = await fetchGitHubUser(token);
+    const isNew = !getUser(gh.login);
     const user = upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
     setSession(res, user.login, req.secure);
     logUsage(user.login, "login");
+    // Fire the approval workflow emails for brand-new, non-admin sign-ups.
+    if (isNew && !isAdmin(user.login)) {
+      const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
+      const tok = makeActionToken(user.login);
+      const approveUrl = `${appUrl}/admin/action?token=${encodeURIComponent(tok)}&d=approved`;
+      const denyUrl = `${appUrl}/admin/action?token=${encodeURIComponent(tok)}&d=denied`;
+      emailAdminNewUser(user, approveUrl, denyUrl, appUrl).catch((e) => console.error("admin email:", e.message));
+      emailUserPending(user, appUrl).catch((e) => console.error("user pending email:", e.message));
+      logUsage(user.login, "signup");
+    }
     res.redirect("/");
   } catch (err) {
     console.error("oauth callback error:", err.message);
@@ -244,7 +271,34 @@ app.post("/api/admin/decide", requireAdmin, (req, res) => {
   const u = setStatus(login, decision, req.authUser.login);
   if (!u) return res.status(404).json({ error: "user not found" });
   logUsage(req.authUser.login, "decide", `${login} -> ${decision}`);
+  if (decision === "approved" || decision === "denied") {
+    const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
+    emailUserDecision(u, decision, appUrl).catch((e) => console.error("decision email:", e.message));
+  }
   res.json({ ok: true, user: u });
+});
+
+// One-click Approve/Deny from the admin's email (signed, expiring token).
+app.get("/admin/action", (req, res) => {
+  const { token, d } = req.query;
+  const decision = d === "approved" ? "approved" : d === "denied" ? "denied" : null;
+  const login = verifyActionToken(token);
+  const fail = (msg) => res.status(400).send(actionPage("Link problem", msg, false));
+  if (!decision) return fail("That link is missing a valid decision.");
+  if (!login) return fail("This link is invalid or has expired. Use the admin dashboard instead.");
+  if (isAdmin(login)) return fail("That account is an admin and can't be changed.");
+  const u = getUser(login);
+  if (!u) return fail("That user no longer exists.");
+  setStatus(login, decision, "email-link");
+  logUsage("email-link", "decide", `${login} -> ${decision}`);
+  const appUrl = process.env.PUBLIC_BASE_URL || baseUrl(req);
+  emailUserDecision(u, decision, appUrl).catch((e) => console.error("decision email:", e.message));
+  const word = decision === "approved" ? "approved" : "denied";
+  res.send(actionPage(
+    `Access ${word}`,
+    `<b>@${login}</b> has been <b>${word}</b>${u.email ? ` and notified at ${u.email}` : ""}.`,
+    true
+  ));
 });
 
 app.get("/api/config", (req, res) => {
@@ -374,5 +428,6 @@ app.listen(PORT, () => {
   console.log(`\n🛰  Hubble running at http://localhost:${PORT}`);
   console.log(`   Agent: ${AGENT_ID}`);
   console.log(`   Speech region: ${SPEECH_REGION} (keyless AAD)`);
-  console.log(`   Auth: ${DEV_MODE ? "DEV MODE (no OAuth App) — simulated GitHub login" : "GitHub OAuth"} | admins: ${ADMIN_LOGINS.join(", ")}\n`);
+  console.log(`   Auth: ${DEV_MODE ? "DEV MODE (no OAuth App) — simulated GitHub login" : "GitHub OAuth"} | admins: ${ADMIN_LOGINS.join(", ")}`);
+  console.log(`   Email: ${EMAIL_ENABLED ? "ACS enabled" : "disabled (no ACS config)"}\n`);
 });

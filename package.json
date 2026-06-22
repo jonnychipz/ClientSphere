@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@azure/ai-projects": "^1.0.0",
+    "@azure/communication-email": "^1.1.0",
     "@azure/identity": "^4.5.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2"

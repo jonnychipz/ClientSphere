@@ -68,7 +68,7 @@ export function authorizeUrl(state, redirectUri) {
   const p = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: redirectUri,
-    scope: "read:user",
+    scope: "read:user user:email",
     state,
     allow_signup: "true",
   });
@@ -85,10 +85,48 @@ export async function exchangeCode(code, redirectUri) {
   return data.access_token;
 }
 export async function fetchGitHubUser(token) {
-  const res = await fetch("https://api.github.com/user", {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "Hubble" },
-  });
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "Hubble" };
+  const res = await fetch("https://api.github.com/user", { headers });
   if (!res.ok) throw new Error(`GitHub /user returned ${res.status}`);
   const u = await res.json();
-  return { login: u.login, name: u.name || u.login, avatar: u.avatar_url || "" };
+  // Best-effort: resolve a verified primary email (needs user:email scope).
+  let email = u.email || null;
+  try {
+    const er = await fetch("https://api.github.com/user/emails", { headers });
+    if (er.ok) {
+      const emails = await er.json();
+      const primary = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.verified);
+      if (primary) email = primary.email;
+    }
+  } catch { /* ignore */ }
+  return {
+    login: u.login,
+    name: u.name || u.login,
+    avatar: u.avatar_url || "",
+    email,
+    bio: u.bio || "",
+    company: u.company || "",
+    location: u.location || "",
+    blog: u.blog || "",
+    followers: u.followers ?? 0,
+    publicRepos: u.public_repos ?? 0,
+    htmlUrl: u.html_url || `https://github.com/${u.login}`,
+    githubCreatedAt: u.created_at || null,
+  };
+}
+
+// ---------- signed action tokens (email Approve/Deny links) ----------
+export function makeActionToken(login, ttlSeconds = 14 * 24 * 60 * 60) {
+  return sign({ act: login, exp: Math.floor(Date.now() / 1000) + ttlSeconds });
+}
+export function verifyActionToken(token) {
+  if (!token || !token.includes(".")) return null;
+  const [payload, mac] = token.split(".");
+  const expected = crypto.createHmac("sha256", SECRET).update(payload).digest("base64url");
+  if (mac.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) return null;
+  try {
+    const obj = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!obj.act || !obj.exp || Date.now() / 1000 > obj.exp) return null;
+    return obj.act;
+  } catch { return null; }
 }
