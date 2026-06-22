@@ -2,6 +2,8 @@
 
 An AI voice + avatar coach that helps sellers get up to speed selling the **entire GitHub portfolio**. Hubble is deep product/commercial expert, researcher and sales coach in one — built on **Azure AI Foundry (GPT‑5.4)** with the **Agent framework**, a **real‑time talking avatar**, **speech‑to‑text**, and a clean single‑page web app.
 
+**Live:** https://hubble-coach-kehfuc.azurewebsites.net · **Deploy/CI-CD:** see [`DEPLOYMENT.md`](DEPLOYMENT.md) · **Auth:** see [`AUTH-SETUP.md`](AUTH-SETUP.md)
+
 ![Hubble live](hubble-live.png)
 
 ## What it does
