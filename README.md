@@ -20,6 +20,13 @@ An AI voice + avatar coach that helps sellers get up to speed selling the **enti
 - **Scene backgrounds** — 10 photographic landscape/office scenes chroma-keyed behind the avatar. The **scene picker only appears while the avatar is live**, and **randomises on first load**.
 - **Type or talk** — full text chat plus a **microphone** (speech‑to‑text) input.
 
+## Coaching toolkit
+A toolbar above the chat unlocks four power features:
+- **🎭 Roleplay & scorecard** — Hubble *becomes the customer* (CISO, CTO, VP Eng, Procurement or Dev champion, at three difficulty levels). Practise your pitch live, then **End & score me** for a coaching scorecard (ratings out of 5 + specific strengths and fixes).
+- **🧮 ROI calculator** — model seats × plan vs developer cost and productivity uplift → live annual cost, value, payback and ROI in USD/GBP/EUR, with a one-click "coach this business case".
+- **📋 Session recap** — generate a written recap (topics, key facts, action items, official links) and **copy / download .md / email** it.
+- **🌐 Live web grounding** — Hubble can fetch **current** info from official GitHub/Microsoft pages (`fetch_official_doc` tool, domain-allowlisted) when something may have changed since the June-2026 knowledge base.
+
 ## Architecture
 ```
 Browser SPA (public/)

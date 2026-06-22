@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
+import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -195,15 +196,46 @@ function renderAssistantMessage(msg) {
   return { text: text.trim(), citations };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Run the agent and resolve any function tool calls (live web grounding) until
+// the run reaches a terminal state.
+async function runAgent(tid) {
+  let run = await agents.runs.create(tid, AGENT_ID);
+  for (let i = 0; i < 60; i++) {
+    if (["queued", "in_progress", "cancelling"].includes(run.status)) {
+      await sleep(800);
+      run = await agents.runs.get(tid, run.id);
+      continue;
+    }
+    if (run.status === "requires_action") {
+      const calls = run.requiredAction?.submitToolOutputs?.toolCalls || [];
+      const outputs = [];
+      for (const c of calls) {
+        const fn = c.function || c.functionDetails;
+        let output = `Error: unknown tool '${fn?.name}'.`;
+        if (fn?.name === FETCH_DOC_TOOL.name) {
+          output = await fetchOfficialDoc(fn.arguments);
+        }
+        outputs.push({ toolCallId: c.id, output });
+      }
+      run = await agents.runs.submitToolOutputs(tid, run.id, outputs);
+      continue;
+    }
+    break; // completed / failed / expired / cancelled
+  }
+  return run;
+}
+
 app.post("/api/chat", async (req, res) => {
   const { message, threadId } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   try {
     const tid = threadId || (await agents.threads.create()).id;
     await agents.messages.create(tid, "user", message);
-    const run = await agents.runs.createAndPoll(tid, AGENT_ID);
+    const run = await runAgent(tid);
     if (run.status !== "completed") {
-      return res.status(502).json({ error: `Run ${run.status}`, detail: run.lastError?.message });
+      return res.status(502).json({ error: `Run ${run.status}`, detail: run.lastError?.message || run.lastError?.code });
     }
     // newest assistant message
     const list = agents.messages.list(tid, { order: "desc", limit: 10 });

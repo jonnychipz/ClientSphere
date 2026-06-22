@@ -67,6 +67,18 @@
 
     <!-- Right: chat -->
     <section class="chat">
+      <div class="chat-toolbar">
+        <button type="button" class="tool-btn" id="roleplayBtn" title="Practice your pitch">🎭 Roleplay</button>
+        <button type="button" class="tool-btn" id="roiBtn" title="Build a business case">🧮 ROI</button>
+        <button type="button" class="tool-btn" id="recapBtn" title="Summarise this session">📋 Recap</button>
+      </div>
+
+      <div class="roleplay-banner" id="roleplayBanner" hidden>
+        <span class="rp-dot"></span>
+        <span id="roleplayLabel">Roleplay in progress</span>
+        <button type="button" id="roleplayEndBtn">End &amp; score me</button>
+      </div>
+
       <div class="messages" id="messages">
         <div class="msg bot welcome">
           <div class="bubble">
@@ -88,6 +100,96 @@
         <button type="submit" class="send" id="sendBtn" title="Send">➤</button>
       </form>
     </section>
+  </div>
+
+  <!-- Roleplay setup modal -->
+  <div class="modal-scrim" id="roleplayModal" hidden>
+    <div class="modal">
+      <div class="modal-head"><span>🎭 Practice roleplay</span><button class="modal-close" data-close="roleplayModal">✕</button></div>
+      <div class="modal-body">
+        <p class="modal-intro">Hubble will play the customer. Pitch, handle objections, and run discovery — then hit <b>End &amp; score me</b> for a coaching scorecard.</p>
+        <label class="fld">Who are you selling to?
+          <select id="rpPersona">
+            <option value="a skeptical CISO focused on security risk, compliance and governance of AI tools">CISO — security &amp; governance</option>
+            <option value="a cost-conscious CTO who cares about TCO, consolidation and developer productivity ROI">CTO — cost &amp; ROI</option>
+            <option value="a VP of Engineering focused on developer velocity, cycle time and platform standardisation">VP Engineering — velocity</option>
+            <option value="a procurement lead who pushes hard on discounts, terms and contract risk">Procurement — price pressure</option>
+            <option value="a developer champion who already loves GitHub but needs help building the internal business case">Developer champion</option>
+          </select>
+        </label>
+        <label class="fld">What are you pitching?
+          <select id="rpProduct">
+            <option value="GitHub Copilot (Business vs Enterprise)">GitHub Copilot</option>
+            <option value="GitHub Advanced Security (Secret Protection + Code Security)">Advanced Security</option>
+            <option value="GitHub Enterprise platform consolidation">GitHub Enterprise platform</option>
+            <option value="the full GitHub platform (land and expand)">Full platform (land &amp; expand)</option>
+          </select>
+        </label>
+        <label class="fld">Difficulty
+          <select id="rpDifficulty">
+            <option value="warm and curious, with a couple of gentle objections">Easy — warm</option>
+            <option value="realistically busy and mildly skeptical, with real objections">Medium — realistic</option>
+            <option value="tough, time-poor and skeptical, pushing hard on price and proof">Hard — tough crowd</option>
+          </select>
+        </label>
+        <button class="modal-cta" id="rpStartBtn">Start roleplay →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROI calculator modal -->
+  <div class="modal-scrim" id="roiModal" hidden>
+    <div class="modal">
+      <div class="modal-head"><span>🧮 Copilot ROI calculator</span><button class="modal-close" data-close="roiModal">✕</button></div>
+      <div class="modal-body">
+        <div class="roi-grid">
+          <label class="fld">Plan
+            <select id="roiPlan">
+              <option value="19">Copilot Business — $19/seat/mo</option>
+              <option value="39">Copilot Enterprise — $39/seat/mo</option>
+            </select>
+          </label>
+          <label class="fld">Seats
+            <input id="roiSeats" type="number" min="1" value="200" />
+          </label>
+          <label class="fld">Avg developer salary (USD/yr)
+            <input id="roiSalary" type="number" min="0" step="1000" value="120000" />
+          </label>
+          <label class="fld">Productivity uplift
+            <select id="roiUplift">
+              <option value="0.10">Conservative — 10%</option>
+              <option value="0.15" selected>Typical — 15%</option>
+              <option value="0.20">Strong — 20%</option>
+            </select>
+          </label>
+          <label class="fld">Currency
+            <select id="roiCurrency">
+              <option value="USD">USD ($)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="EUR">EUR (€)</option>
+            </select>
+          </label>
+        </div>
+        <div class="roi-results" id="roiResults"></div>
+        <button class="modal-cta" id="roiCoachBtn">Ask Hubble to coach this business case</button>
+        <p class="modal-note">Productivity uplift is an assumption for modelling — validate with the customer. Pricing per the in-app reference (verified June 2026).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recap modal -->
+  <div class="modal-scrim" id="recapModal" hidden>
+    <div class="modal">
+      <div class="modal-head"><span>📋 Session recap</span><button class="modal-close" data-close="recapModal">✕</button></div>
+      <div class="modal-body">
+        <div class="recap-out" id="recapOut">Generating your recap…</div>
+        <div class="recap-actions" id="recapActions" hidden>
+          <button class="modal-cta" id="recapCopyBtn">📋 Copy</button>
+          <button class="modal-cta secondary" id="recapDownloadBtn">⬇ Download .md</button>
+          <button class="modal-cta secondary" id="recapEmailBtn">✉ Email me</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Hideaway GitHub resources drawer -->

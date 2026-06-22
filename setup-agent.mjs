@@ -9,6 +9,7 @@ import { AIProjectClient } from "@azure/ai-projects";
 import { ToolUtility } from "@azure/ai-agents";
 import { DefaultAzureCredential } from "@azure/identity";
 import { INSTRUCTIONS } from "./instructions.mjs";
+import { FETCH_DOC_TOOL } from "./webgrounding.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENDPOINT = process.env.PROJECT_ENDPOINT;
@@ -41,15 +42,17 @@ async function main() {
   const vectorStore = await agents.vectorStores.createAndPoll({ fileIds, name: "hubble-github-kb" });
   console.log("   ✓ vector store:", vectorStore.id);
 
-  // 3. Create the file_search tool bound to the vector store
+  // 3. Create the file_search tool bound to the vector store, plus the live
+  //    web-grounding function tool (fetch_official_doc).
   const fileSearch = ToolUtility.createFileSearchTool([vectorStore.id]);
+  const webTool = ToolUtility.createFunctionTool(FETCH_DOC_TOOL);
 
   // 4. Create (or recreate) the Hubble agent
   console.log("→ Creating Hubble agent on", MODEL, "…");
   const agent = await agents.createAgent(MODEL, {
     name: "Hubble — GitHub Seller Coach",
     instructions: INSTRUCTIONS,
-    tools: [fileSearch.definition],
+    tools: [fileSearch.definition, webTool.definition],
     toolResources: fileSearch.resources,
     temperature: 0.7,
   });

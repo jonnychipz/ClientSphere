@@ -22,6 +22,12 @@ const els = {
   drawerToggle: document.getElementById("drawerToggle"),
   drawerClose: document.getElementById("drawerClose"),
   drawerLinks: document.getElementById("drawerLinks"),
+  roleplayBtn: document.getElementById("roleplayBtn"),
+  roiBtn: document.getElementById("roiBtn"),
+  recapBtn: document.getElementById("recapBtn"),
+  roleplayBanner: document.getElementById("roleplayBanner"),
+  roleplayLabel: document.getElementById("roleplayLabel"),
+  roleplayEndBtn: document.getElementById("roleplayEndBtn"),
   audio: document.getElementById("avatarAudio"),
   idle: document.getElementById("avatarIdle"),
   status: document.getElementById("avatarStatus"),
@@ -51,7 +57,8 @@ const state = {
   speaking: false,
   stoppedManually: false,
   busy: false,
-  pendingText: null,
+  pending: null,
+  roleplayActive: false,
   userName: null,
   greeted: false,
   endCall: false,
@@ -120,22 +127,28 @@ function addTyping() {
 
 // ---------- chat ----------
 // Serialized: the Foundry thread allows only one active run at a time, so we
-// never fire a second /api/chat while one is in flight. A new message that
+// never fire a second /api/chat while one is in flight. A new request that
 // arrives mid-run is held as the single pending item and sent when the run ends.
 async function sendMessage(text) {
   text = (text || "").trim();
   if (!text) return;
-  // Barge-in: a new question (typed or spoken) interrupts the avatar mid-sentence
-  // and refocuses on what was just asked — context is preserved by the thread.
-  interruptAvatar();
-  stopListening();
   // Detect "I'm wrapping up" intent so we don't reopen the mic after the reply.
   state.endCall = isEndingIntent(text);
-  addMessage("user", text);
   els.input.value = "";
   els.input.style.height = "auto";
-  if (state.busy) { state.pendingText = text; return; } // queue until current run finishes
-  runChat(text);
+  dispatch(text, { userText: text });
+}
+
+// Unified entry point. opts:
+//   userText  — string shown as the user bubble (null = don't show one)
+//   speak     — false to skip TTS for this reply
+//   onReply   — fn(data) to handle the reply instead of rendering a bot bubble
+function dispatch(prompt, opts = {}) {
+  interruptAvatar();
+  stopListening();
+  if (opts.userText) addMessage("user", opts.userText);
+  if (state.busy) { state.pending = { prompt, opts }; return; }
+  runChat(prompt, opts);
 }
 
 // Heuristic: is the user signalling the conversation/call is over?
@@ -152,37 +165,42 @@ function isEndingIntent(text) {
   return phrases.some((p) => t.includes(" " + p + " ") || t.includes(" " + p));
 }
 
-async function runChat(text) {
+async function runChat(prompt, opts = {}) {
   state.busy = true;
-  const typing = addTyping();
+  const typing = opts.onReply ? null : addTyping();
   els.sendBtn.disabled = true;
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, threadId: state.threadId }),
+      body: JSON.stringify({ message: prompt, threadId: state.threadId }),
     });
     const data = await res.json();
-    typing.remove();
+    if (typing) typing.remove();
     if (!res.ok) {
-      addMessage("bot", "⚠️ " + (data.error || "Something went wrong.") + (data.detail ? "\n" + data.detail : ""));
+      if (opts.onReply) opts.onReply({ error: data.error || "Something went wrong." });
+      else addMessage("bot", "⚠️ " + (data.error || "Something went wrong.") + (data.detail ? "\n" + data.detail : ""));
       return;
     }
     state.threadId = data.threadId;
-    addMessage("bot", data.reply, data.citations);
-    if (state.voiceOn && state.avatarLive) speak(data.reply);
+    if (opts.onReply) {
+      opts.onReply(data);
+    } else {
+      addMessage("bot", data.reply, data.citations);
+      if (state.voiceOn && state.avatarLive && opts.speak !== false) speak(data.reply);
+    }
   } catch (err) {
-    typing.remove();
-    addMessage("bot", "⚠️ Network error: " + err.message);
+    if (typing) typing.remove();
+    if (opts.onReply) opts.onReply({ error: err.message });
+    else addMessage("bot", "⚠️ Network error: " + err.message);
   } finally {
     state.busy = false;
     els.sendBtn.disabled = false;
     els.input.focus();
-    // Send whatever the user queued while we were busy.
-    if (state.pendingText) {
-      const next = state.pendingText;
-      state.pendingText = null;
-      runChat(next);
+    if (state.pending) {
+      const next = state.pending;
+      state.pending = null;
+      runChat(next.prompt, next.opts);
     }
   }
 }
@@ -192,7 +210,7 @@ async function runChat(text) {
 function kickoffGreeting() {
   if (state.greeted) return;
   state.greeted = true;
-  runChat("[SYSTEM: The seller just turned on voice mode and hasn't spoken yet. Greet them warmly in one or two short sentences and ask their first name. Don't cover anything else yet.]");
+  dispatch("[SYSTEM: The seller just turned on voice mode and hasn't spoken yet. Greet them warmly in one or two short sentences and ask their first name. Don't cover anything else yet.]", {});
 }
 
 // Strip citation markers / markdown so the avatar speaks naturally
@@ -577,6 +595,116 @@ function openDrawer(open) {
   if (!open) setTimeout(() => { if (!els.drawer.classList.contains("open")) els.drawerScrim.hidden = true; }, 280);
 }
 
+// ---------- modals ----------
+function openModal(id, open) {
+  document.getElementById(id).hidden = !open;
+}
+
+// ---------- Roleplay & scorecard ----------
+function startRoleplay() {
+  const persona = document.getElementById("rpPersona").value;
+  const personaLabel = document.getElementById("rpPersona").selectedOptions[0].text;
+  const product = document.getElementById("rpProduct").value;
+  const difficulty = document.getElementById("rpDifficulty").value;
+  openModal("roleplayModal", false);
+  state.roleplayActive = true;
+  els.roleplayLabel.textContent = `Roleplay: ${personaLabel}`;
+  els.roleplayBanner.hidden = false;
+  const directive =
+    `[[ROLEPLAY_START]] Enter roleplay mode now. You are no longer the coach — you ARE the customer: ${persona}. ` +
+    `The seller is pitching ${product}. Be ${difficulty}. Stay fully in character as the customer, speak in first person, ` +
+    `react realistically, raise objections, and ask pointed questions. Keep each turn short and conversational. ` +
+    `Do NOT coach or break character until you receive [[ROLEPLAY_SCORE]]. Open with a brief, in-character greeting that sets the scene.`;
+  dispatch(directive, { userText: `🎭 Starting roleplay — ${personaLabel}` });
+}
+function endRoleplayAndScore() {
+  if (!state.roleplayActive) return;
+  state.roleplayActive = false;
+  els.roleplayBanner.hidden = true;
+  const directive =
+    `[[ROLEPLAY_SCORE]] Roleplay over — break character and become Hubble the coach again. Score the seller's performance ` +
+    `in this roleplay. Give a short scorecard with ratings out of 5 for: Discovery, Value & positioning, Objection handling, ` +
+    `and Next-step / close. Then 2–3 specific things they did well and 2–3 concrete improvements. Keep it punchy and encouraging.`;
+  dispatch(directive, { userText: "🎯 End & score me" });
+}
+
+// ---------- ROI calculator ----------
+const FX = { USD: 1, GBP: 0.79, EUR: 0.92 };
+const SYM = { USD: "$", GBP: "£", EUR: "€" };
+function fmtMoney(usd, cur) {
+  const v = usd * (FX[cur] || 1);
+  return SYM[cur] + Math.round(v).toLocaleString("en-US");
+}
+function computeRoi() {
+  const seat = Number(document.getElementById("roiPlan").value);
+  const seats = Math.max(1, Number(document.getElementById("roiSeats").value) || 0);
+  const salary = Math.max(0, Number(document.getElementById("roiSalary").value) || 0);
+  const uplift = Number(document.getElementById("roiUplift").value);
+  const cur = document.getElementById("roiCurrency").value;
+  const annualCost = seat * seats * 12;
+  const annualValue = salary * uplift * seats;
+  const net = annualValue - annualCost;
+  const roiX = annualCost > 0 ? annualValue / annualCost : 0;
+  const paybackWeeks = annualValue > 0 ? (annualCost / annualValue) * 52 : 0;
+  const rows = [
+    ["Annual Copilot cost", fmtMoney(annualCost, cur), false],
+    ["Est. annual productivity value", fmtMoney(annualValue, cur), false],
+    ["Net annual benefit", fmtMoney(net, cur), false],
+    ["Payback", paybackWeeks < 52 ? `${paybackWeeks.toFixed(1)} weeks` : `${(paybackWeeks / 52).toFixed(1)} yrs`, false],
+    ["Return on investment", `${roiX.toFixed(1)}× (${Math.round((roiX - 1) * 100)}% ROI)`, true],
+  ];
+  document.getElementById("roiResults").innerHTML = rows
+    .map(([k, v, hl]) => `<div class="roi-row${hl ? " headline" : ""}"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+    .join("");
+  return { seat, seats, salary, uplift, cur, annualCost, annualValue, net, roiX, paybackWeeks };
+}
+function roiCoachPrompt() {
+  const r = computeRoi();
+  const planName = document.getElementById("roiPlan").selectedOptions[0].text;
+  openModal("roiModal", false);
+  const msg =
+    `I've modelled a Copilot business case: ${r.seats} seats on ${planName}, ` +
+    `assuming a ${Math.round(r.uplift * 100)}% productivity uplift on a ${SYM[r.cur]}${Math.round(r.salary * (FX[r.cur] || 1)).toLocaleString()} average developer salary. ` +
+    `That's ${fmtMoney(r.annualCost, r.cur)}/yr cost vs ${fmtMoney(r.annualValue, r.cur)}/yr value (${r.roiX.toFixed(1)}× ROI). ` +
+    `Coach me on how to present this business case to the customer — what to emphasise, what to validate, and the next step.`;
+  dispatch(msg, { userText: "🧮 Coach my ROI business case" });
+}
+
+// ---------- Session recap ----------
+function openRecap() {
+  openModal("recapModal", true);
+  document.getElementById("recapOut").textContent = "Generating your recap…";
+  document.getElementById("recapActions").hidden = true;
+  const directive =
+    "[[SESSION_RECAP]] Produce a concise written recap of THIS session for the seller to keep. " +
+    "Use plain text with short sections: Topics covered, Key facts & numbers, Action items, and Useful links (official GitHub/Microsoft URLs). " +
+    "Be specific to what we actually discussed. This is for reading, not speaking.";
+  dispatch(directive, {
+    userText: null,
+    speak: false,
+    onReply: (data) => {
+      const out = document.getElementById("recapOut");
+      if (data.error) { out.textContent = "⚠️ " + data.error; return; }
+      state.lastRecap = data.reply;
+      out.textContent = data.reply;
+      document.getElementById("recapActions").hidden = false;
+    },
+  });
+}
+function downloadRecap() {
+  const blob = new Blob([state.lastRecap || ""], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `hubble-recap-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function emailRecap() {
+  const subject = encodeURIComponent("Hubble session recap — GitHub coaching");
+  const body = encodeURIComponent(state.lastRecap || "");
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
 // ---------- init ----------
 async function init() {
   if (!SDK) { toast("Speech SDK failed to load."); }
@@ -613,6 +741,29 @@ async function init() {
   els.drawerClose.addEventListener("click", () => openDrawer(false));
   els.drawerScrim.addEventListener("click", () => openDrawer(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") openDrawer(false); });
+
+  // Feature toolbar
+  els.roleplayBtn.addEventListener("click", () => openModal("roleplayModal", true));
+  els.roiBtn.addEventListener("click", () => { openModal("roiModal", true); computeRoi(); });
+  els.recapBtn.addEventListener("click", openRecap);
+  els.roleplayEndBtn.addEventListener("click", endRoleplayAndScore);
+  document.getElementById("rpStartBtn").addEventListener("click", startRoleplay);
+  document.getElementById("roiCoachBtn").addEventListener("click", roiCoachPrompt);
+  document.getElementById("recapCopyBtn").addEventListener("click", () => {
+    navigator.clipboard.writeText(state.lastRecap || "").then(() => toast("Recap copied to clipboard."));
+  });
+  document.getElementById("recapDownloadBtn").addEventListener("click", downloadRecap);
+  document.getElementById("recapEmailBtn").addEventListener("click", emailRecap);
+  ["roiPlan", "roiSeats", "roiSalary", "roiUplift", "roiCurrency"].forEach((id) =>
+    document.getElementById(id).addEventListener("input", computeRoi)
+  );
+  // Modal close buttons + scrim click
+  document.querySelectorAll(".modal-close").forEach((b) =>
+    b.addEventListener("click", () => openModal(b.dataset.close, false))
+  );
+  document.querySelectorAll(".modal-scrim").forEach((s) =>
+    s.addEventListener("click", (e) => { if (e.target === s) s.hidden = true; })
+  );
 
   // keep the speech auth token fresh for long sessions
   setInterval(() => { if (state.speechConfig) refreshToken().catch(() => {}); }, 8 * 60 * 1000);
