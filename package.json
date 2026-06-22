@@ -4,6 +4,9 @@
   "description": "Hubble — GitHub seller coach voice agent on Azure AI Foundry (gpt-5.4) with talking avatar",
   "type": "module",
   "main": "server.mjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "setup": "node setup-agent.mjs",
     "update": "node update-agent.mjs",
