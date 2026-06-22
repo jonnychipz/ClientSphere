@@ -22,8 +22,9 @@
         <span class="status" id="avatarStatus" title="Avatar status">offline</span>
       </header>
 
-      <div class="avatar-wrap">
-        <video id="avatarVideo" autoplay playsinline></video>
+      <div class="avatar-wrap" id="avatarWrap">
+        <video id="avatarVideo" autoplay playsinline muted></video>
+        <canvas id="avatarCanvas"></canvas>
         <audio id="avatarAudio" autoplay></audio>
         <div class="avatar-idle" id="avatarIdle">
           <div class="orb"></div>
@@ -46,8 +47,13 @@
         </div>
 
         <div class="picker">
-          <label for="voiceSelect">Voice</label>
+          <label for="voiceSelect">Voice &amp; body</label>
           <select id="voiceSelect"></select>
+        </div>
+
+        <div class="picker bg-picker">
+          <label>Background</label>
+          <div class="swatches" id="bgSwatches"></div>
         </div>
       </div>
     </section>

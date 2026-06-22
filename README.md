@@ -15,6 +15,8 @@ An AI voice + avatar coach that helps sellers get up to speed selling the **enti
 - **Stop button** — a red ⏹ Stop appears while Hubble is speaking to silence the avatar on demand.
 - **Hands the mic back** — after Hubble finishes speaking, the mic re-opens automatically so you can just talk.
 - **Avatar choice** — switch between a **female (Lisa)** and **male (Harry)** avatar, each with a selectable neural **voice** (British / US / Australian).
+- **Avatar bodies tied to each voice** — every voice picks a **distinct avatar body** (Azure standard avatars: Lisa, Lori, Meg for female; Harry, Max for male). Changing the voice changes who you see.
+- **Background chooser** — eight gradient backgrounds (Aurora, GitHub Dark, Studio Teal, Sunset, Midnight, Slate, Emerald, Clean Light) via swatch picker; the avatar is rendered on a green backdrop and **chroma-keyed in the browser** so any background shows behind Hubble. **Randomises on first load.**
 - **Type or talk** — full text chat plus a **microphone** (speech‑to‑text) input.
 
 ## Architecture

@@ -13,6 +13,9 @@ const els = {
   genderSeg: document.getElementById("genderSeg"),
   voiceSelect: document.getElementById("voiceSelect"),
   video: document.getElementById("avatarVideo"),
+  canvas: document.getElementById("avatarCanvas"),
+  avatarWrap: document.getElementById("avatarWrap"),
+  bgSwatches: document.getElementById("bgSwatches"),
   audio: document.getElementById("avatarAudio"),
   idle: document.getElementById("avatarIdle"),
   status: document.getElementById("avatarStatus"),
@@ -26,6 +29,10 @@ const state = {
   threadId: null,
   gender: "female",
   voice: null,
+  body: null,          // { character, style } paired with the chosen voice
+  background: null,    // chosen background { id, label, css }
+  green: "#00FF00FF",  // avatar backdrop colour we chroma-key out
+  rafId: null,
   voiceOn: false,
   speechConfig: null,
   tokenInfo: null,
@@ -225,9 +232,12 @@ async function startAvatar() {
   if (!relayRes.ok) throw new Error("Could not get relay token");
   const relay = await relayRes.json();
 
-  const avatarInfo = state.cfg.avatars[state.gender];
+  const body = state.body || { character: "lisa", style: "graceful-standing" };
   const videoFormat = new SDK.AvatarVideoFormat();
-  const avatarConfig = new SDK.AvatarConfig(avatarInfo.character, avatarInfo.style, videoFormat);
+  const avatarConfig = new SDK.AvatarConfig(body.character, body.style, videoFormat);
+  // Render on a flat green backdrop so we can chroma-key it out and show any
+  // background behind the avatar.
+  avatarConfig.backgroundColor = state.green;
   state.speechConfig.speechSynthesisVoiceName = state.voice;
 
   const synth = new SDK.AvatarSynthesizer(state.speechConfig, avatarConfig);
@@ -241,7 +251,8 @@ async function startAvatar() {
   peer.ontrack = (event) => {
     if (event.track.kind === "video") {
       els.video.srcObject = event.streams[0];
-      els.video.classList.add("show");
+      els.video.play?.().catch(() => {});
+      startChromaLoop();
       els.idle.classList.add("hide");
     } else if (event.track.kind === "audio") {
       els.audio.srcObject = event.streams[0];
@@ -255,17 +266,58 @@ async function startAvatar() {
     state.avatarLive = true;
     setStatus("live", "live");
   } else {
-    throw new Error("Avatar failed to start (reason " + result.reason + ")");
+    let detail = "reason " + result.reason;
+    try {
+      const cd = SDK.CancellationDetails.fromResult(result);
+      detail += " — " + cd.reason + ": " + cd.errorDetails;
+    } catch {}
+    throw new Error("Avatar failed to start (" + detail + ")");
   }
 }
 
+// Draw the avatar video to a canvas each frame, making the green backdrop
+// transparent so the chosen CSS background (on .avatar-wrap) shows through.
+function startChromaLoop() {
+  const canvas = els.canvas;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  els.canvas.classList.add("show");
+  const draw = () => {
+    state.rafId = requestAnimationFrame(draw);
+    const v = els.video;
+    if (!v.videoWidth) return;
+    // Keep the keying canvas light: cap width ~640px, preserve aspect ratio.
+    const w = Math.min(640, v.videoWidth);
+    const h = Math.round((v.videoHeight / v.videoWidth) * w);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.drawImage(v, 0, 0, w, h);
+    const frame = ctx.getImageData(0, 0, w, h);
+    const d = frame.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      // Green-dominant pixels become transparent (soft edge near the threshold).
+      if (g > 90 && g > r + 40 && g > b + 40) {
+        d[i + 3] = 0;
+      } else if (g > 80 && g > r + 20 && g > b + 20) {
+        d[i + 3] = Math.min(d[i + 3], 90); // feather fringe
+      }
+    }
+    ctx.putImageData(frame, 0, 0);
+  };
+  draw();
+}
+
+function stopChromaLoop() {
+  if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+  els.canvas.classList.remove("show");
+}
+
 function stopAvatar() {
+  stopChromaLoop();
   try { state.avatarSynth && state.avatarSynth.close(); } catch {}
   try { state.peer && state.peer.close(); } catch {}
   state.avatarSynth = null;
   state.peer = null;
   state.avatarLive = false;
-  els.video.classList.remove("show");
   els.video.srcObject = null;
   els.idle.classList.remove("hide");
   els.speakingBar.classList.remove("on");
@@ -330,7 +382,15 @@ function stopListening() {
   if (state.recognizer) { try { state.recognizer.close(); } catch {} state.recognizer = null; }
 }
 
-// ---------- gender / voice pickers ----------
+// ---------- gender / voice / body pickers ----------
+function currentVoiceObj() {
+  return state.cfg.voices[state.gender].find((v) => v.id === state.voice) || state.cfg.voices[state.gender][0];
+}
+function applyBodyFromVoice() {
+  const v = currentVoiceObj();
+  state.voice = v.id;
+  state.body = { character: v.character, style: v.style };
+}
 function populateVoices() {
   const list = state.cfg.voices[state.gender];
   els.voiceSelect.innerHTML = "";
@@ -340,8 +400,28 @@ function populateVoices() {
     opt.textContent = v.label;
     els.voiceSelect.appendChild(opt);
   });
-  state.voice = state.cfg.avatars[state.gender].defaultVoice || list[0].id;
+  state.voice = list[0].id;
   els.voiceSelect.value = state.voice;
+  applyBodyFromVoice();
+}
+
+async function restartAvatarIfLive(msg) {
+  if (!state.voiceOn) return;
+  stopAvatar();
+  setStatus("connecting", "connecting");
+  // Give the service a moment to release the previous avatar session, otherwise
+  // the new one is rejected as a concurrent request (throttle 4429).
+  await new Promise((r) => setTimeout(r, 1400));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await startAvatar(); return; }
+    catch (e) {
+      const throttled = /throttl|4429|concurrent/i.test(e.message || "");
+      if (throttled && attempt < 2) { await new Promise((r) => setTimeout(r, 2500)); continue; }
+      toast((msg || "Avatar restart failed") + ": " + e.message);
+      setStatus("offline");
+      return;
+    }
+  }
 }
 
 async function setGender(g) {
@@ -349,10 +429,42 @@ async function setGender(g) {
   state.gender = g;
   [...els.genderSeg.children].forEach((b) => b.classList.toggle("active", b.dataset.gender === g));
   populateVoices();
-  if (state.voiceOn) {
-    stopAvatar();
-    try { await startAvatar(); } catch (e) { toast("Avatar restart failed: " + e.message); }
-  }
+  await restartAvatarIfLive("Couldn't switch avatar");
+}
+
+async function setVoice(voiceId) {
+  state.voice = voiceId;
+  applyBodyFromVoice(); // changing voice also changes the body
+  await restartAvatarIfLive("Couldn't switch voice/body");
+}
+
+// ---------- background chooser ----------
+function applyBackground(bg) {
+  state.background = bg;
+  els.avatarWrap.style.background = bg.css;
+  [...els.bgSwatches.children].forEach((s) => s.classList.toggle("active", s.dataset.id === bg.id));
+  try { localStorage.setItem("hubble.bg", bg.id); } catch {}
+}
+function renderBackgrounds() {
+  const list = state.cfg.backgrounds || [];
+  els.bgSwatches.innerHTML = "";
+  list.forEach((bg) => {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.dataset.id = bg.id;
+    b.title = bg.label;
+    b.style.background = bg.css;
+    b.addEventListener("click", () => applyBackground(bg));
+    els.bgSwatches.appendChild(b);
+  });
+  // Restore last choice, otherwise randomise for this load.
+  let chosen = null;
+  try {
+    const saved = localStorage.getItem("hubble.bg");
+    if (saved) chosen = list.find((x) => x.id === saved);
+  } catch {}
+  if (!chosen && list.length) chosen = list[Math.floor(Math.random() * list.length)];
+  if (chosen) applyBackground(chosen);
 }
 
 // ---------- init ----------
@@ -360,8 +472,10 @@ async function init() {
   if (!SDK) { toast("Speech SDK failed to load."); }
   const r = await fetch("/api/config");
   state.cfg = await r.json();
+  state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
   populateVoices();
+  renderBackgrounds(); // randomises on first load
 
   els.composer.addEventListener("submit", (e) => { e.preventDefault(); sendMessage(els.input.value); });
   els.input.addEventListener("keydown", (e) => {
@@ -378,7 +492,7 @@ async function init() {
     const b = e.target.closest("button[data-gender]");
     if (b) setGender(b.dataset.gender);
   });
-  els.voiceSelect.addEventListener("change", () => { state.voice = els.voiceSelect.value; });
+  els.voiceSelect.addEventListener("change", () => { setVoice(els.voiceSelect.value); });
   document.querySelectorAll(".chip").forEach((c) =>
     c.addEventListener("click", () => sendMessage(c.textContent))
   );

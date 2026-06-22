@@ -37,25 +37,36 @@ const prettySource = (name) =>
     .replace(/-/g, " ");
 
 // ---- Voice + avatar catalogue offered in the UI ----
+// Each voice is paired with a distinct avatar BODY (Azure standard avatar
+// character + style), so choosing a voice also changes who you see.
 const VOICES = {
   female: [
-    { id: "en-GB-SoniaNeural", label: "Sonia — British English" },
-    { id: "en-US-AvaMultilingualNeural", label: "Ava — US English (multilingual)" },
-    { id: "en-US-JennyNeural", label: "Jenny — US English" },
-    { id: "en-AU-NatashaNeural", label: "Natasha — Australian English" },
+    { id: "en-GB-SoniaNeural", label: "Sonia — British English", character: "lisa", style: "casual-sitting" },
+    { id: "en-US-AvaMultilingualNeural", label: "Ava — US English (multilingual)", character: "lori", style: "graceful" },
+    { id: "en-US-JennyNeural", label: "Jenny — US English", character: "meg", style: "business" },
+    { id: "en-AU-NatashaNeural", label: "Natasha — Australian English", character: "lori", style: "casual" },
   ],
   male: [
-    { id: "en-GB-RyanNeural", label: "Ryan — British English" },
-    { id: "en-US-AndrewMultilingualNeural", label: "Andrew — US English (multilingual)" },
-    { id: "en-US-GuyNeural", label: "Guy — US English" },
-    { id: "en-AU-WilliamNeural", label: "William — Australian English" },
+    { id: "en-GB-RyanNeural", label: "Ryan — British English", character: "harry", style: "business" },
+    { id: "en-US-AndrewMultilingualNeural", label: "Andrew — US English (multilingual)", character: "max", style: "business" },
+    { id: "en-US-GuyNeural", label: "Guy — US English", character: "harry", style: "youthful" },
+    { id: "en-AU-WilliamNeural", label: "William — Australian English", character: "max", style: "casual" },
   ],
 };
-// Real-time TTS avatar characters/styles supported by Azure
-const AVATARS = {
-  female: { character: "lisa", style: "casual-sitting", defaultVoice: "en-GB-SoniaNeural" },
-  male: { character: "harry", style: "business", defaultVoice: "en-GB-RyanNeural" },
-};
+
+// Avatar is rendered on a green backdrop and chroma-keyed out in the browser,
+// so any of these CSS backgrounds can sit behind Hubble (richer than plain white).
+const AVATAR_GREEN = "#00FF00FF";
+const BACKGROUNDS = [
+  { id: "aurora", label: "Aurora", css: "linear-gradient(135deg, #7c3aed 0%, #2f81f7 100%)" },
+  { id: "githubDark", label: "GitHub Dark", css: "linear-gradient(160deg, #21262d 0%, #0d1117 100%)" },
+  { id: "teal", label: "Studio Teal", css: "linear-gradient(135deg, #0f766e 0%, #134e4a 100%)" },
+  { id: "sunset", label: "Sunset", css: "linear-gradient(135deg, #f97316 0%, #be185d 100%)" },
+  { id: "midnight", label: "Midnight", css: "linear-gradient(160deg, #1e3a8a 0%, #0f172a 100%)" },
+  { id: "slate", label: "Slate Office", css: "linear-gradient(135deg, #475569 0%, #1e293b 100%)" },
+  { id: "emerald", label: "Emerald", css: "linear-gradient(135deg, #059669 0%, #064e3b 100%)" },
+  { id: "light", label: "Clean Light", css: "linear-gradient(160deg, #f8fafc 0%, #dbe2ea 100%)" },
+];
 
 // ---- Cached Speech authorization token for the browser SDK (keyless) ----
 // Exchanges an Entra token for a 10-min Speech token via the custom-domain STS.
@@ -84,7 +95,8 @@ app.get("/api/config", (req, res) => {
     tagline: "Your GitHub sales coach",
     speechRegion: SPEECH_REGION,
     voices: VOICES,
-    avatars: AVATARS,
+    backgrounds: BACKGROUNDS,
+    avatarGreen: AVATAR_GREEN,
   });
 });
 

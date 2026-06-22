@@ -79,12 +79,21 @@ body {
   min-height: 320px;
 }
 #avatarVideo {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  opacity: 0.01;
+  pointer-events: none;
+}
+#avatarCanvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: none;
 }
-#avatarVideo.show { display: block; }
+#avatarCanvas.show { display: block; }
 .avatar-idle {
   position: absolute;
   inset: 0;
@@ -177,6 +186,33 @@ select {
   padding: 8px 12px;
   font-size: 13px;
   min-width: 220px;
+}
+
+/* Background swatches */
+.bg-picker { flex: 1 1 100%; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: 0.15s;
+  position: relative;
+}
+.swatch:hover { transform: translateY(-2px); border-color: var(--muted); }
+.swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+.swatch.active::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 
 /* ---------- Chat ---------- */
