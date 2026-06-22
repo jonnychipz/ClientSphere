@@ -97,6 +97,15 @@ body {
   transition: 0.15s;
 }
 .drawer-toggle:hover { border-color: var(--accent); color: #fff; }
+.user-chip { display: flex; align-items: center; gap: 8px; }
+.user-chip img { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-2); }
+.user-chip .uc-name { font-size: 12.5px; color: var(--text); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip a {
+  font-size: 11.5px; color: var(--muted); text-decoration: none; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 8px; transition: 0.15s;
+}
+.user-chip a:hover { border-color: var(--accent); color: #fff; }
+.user-chip a.admin-link { color: #c9b6ff; border-color: rgba(124,58,237,0.5); }
 
 .avatar-wrap {
   position: relative;

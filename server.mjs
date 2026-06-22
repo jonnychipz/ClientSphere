@@ -9,6 +9,13 @@ import express from "express";
 import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
+import {
+  DEV_MODE, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
+  makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
+} from "./auth.mjs";
+import {
+  getUser, upsertUser, setStatus, listUsers, logUsage, getUsage, usageStats,
+} from "./store.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -128,7 +135,114 @@ const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarCha
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+
+// ---------------- Authentication & access control ----------------
+const PUBLIC_PAGES = new Set(["/login", "/pending", "/denied"]);
+function baseUrl(req) {
+  return `${req.protocol}://${req.get("host")}`;
+}
+function redirectUri(req) {
+  return `${baseUrl(req)}/auth/callback`;
+}
+// Resolve the signed-in user (full record) onto req.authUser.
+function resolveUser(req) {
+  const login = sessionLogin(req);
+  if (!login) return null;
+  // Admins are always approved, even before any decision is recorded.
+  let user = getUser(login);
+  if (!user && isAdmin(login)) user = upsertUser({ login, name: login }, "approved");
+  if (user && isAdmin(login) && user.status !== "approved") user.status = "approved";
+  return user;
+}
+function requireApproved(req, res, next) {
+  const u = resolveUser(req);
+  if (!u) return res.status(401).json({ error: "Not signed in" });
+  if (u.status !== "approved") return res.status(403).json({ error: "Access not approved", status: u.status });
+  req.authUser = u;
+  next();
+}
+function requireAdmin(req, res, next) {
+  const u = resolveUser(req);
+  if (!u || !isAdmin(u.login)) return res.status(403).json({ error: "Admin only" });
+  req.authUser = u;
+  next();
+}
+
+// Static assets (css/js/images/backgrounds) are open; the HTML entry + APIs are gated.
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
+
+// ---- auth routes ----
+app.get("/auth/login", (req, res) => {
+  if (DEV_MODE) return res.redirect("/login?dev=1");
+  const state = makeState();
+  setStateCookie(res, state);
+  res.redirect(authorizeUrl(state, redirectUri(req)));
+});
+
+app.get("/auth/callback", async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    if (!checkState(req, state)) return res.status(400).send("Invalid OAuth state. <a href='/login'>Try again</a>.");
+    const token = await exchangeCode(code, redirectUri(req));
+    const gh = await fetchGitHubUser(token);
+    const user = upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
+    setSession(res, user.login);
+    logUsage(user.login, "login");
+    res.redirect("/");
+  } catch (err) {
+    console.error("oauth callback error:", err.message);
+    res.status(500).send("Sign-in failed: " + err.message + " <a href='/login'>Back</a>");
+  }
+});
+
+// Dev-mode sign-in (only when no real OAuth App is configured).
+app.post("/auth/dev", (req, res) => {
+  if (!DEV_MODE) return res.status(404).json({ error: "Dev login disabled" });
+  const login = (req.body?.login || "").trim();
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(login)) return res.status(400).json({ error: "Enter a valid GitHub username" });
+  const user = upsertUser({ login, name: login }, isAdmin(login) ? "approved" : "pending");
+  setSession(res, user.login);
+  logUsage(user.login, "login", "dev");
+  res.json({ ok: true, status: user.status });
+});
+
+app.get("/auth/logout", (req, res) => { clearSession(res); res.redirect("/login"); });
+
+app.get("/api/me", (req, res) => {
+  const u = resolveUser(req);
+  if (!u) return res.status(401).json({ error: "Not signed in" });
+  res.json({ login: u.login, name: u.name, avatar: u.avatar, status: u.status, isAdmin: isAdmin(u.login) });
+});
+
+// ---- gated pages ----
+app.get("/", (req, res) => {
+  const u = resolveUser(req);
+  if (!u) return res.redirect("/login");
+  if (u.status === "denied") return res.redirect("/denied");
+  if (u.status !== "approved") return res.redirect("/pending");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+for (const p of PUBLIC_PAGES) {
+  app.get(p, (req, res) => res.sendFile(path.join(__dirname, "public", p.slice(1) + ".html")));
+}
+app.get("/admin", (req, res) => {
+  const u = resolveUser(req);
+  if (!u || !isAdmin(u.login)) return res.redirect("/login");
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// ---- admin APIs ----
+app.get("/api/admin/users", requireAdmin, (req, res) => res.json({ users: listUsers(), admins: ADMIN_LOGINS }));
+app.get("/api/admin/usage", requireAdmin, (req, res) => res.json({ recent: getUsage(150), stats: usageStats() }));
+app.post("/api/admin/decide", requireAdmin, (req, res) => {
+  const { login, decision } = req.body || {};
+  if (!["approved", "denied", "pending"].includes(decision)) return res.status(400).json({ error: "bad decision" });
+  if (isAdmin(login)) return res.status(400).json({ error: "Cannot change an admin's access" });
+  const u = setStatus(login, decision, req.authUser.login);
+  if (!u) return res.status(404).json({ error: "user not found" });
+  logUsage(req.authUser.login, "decide", `${login} -> ${decision}`);
+  res.json({ ok: true, user: u });
+});
 
 app.get("/api/config", (req, res) => {
   res.json({
@@ -143,7 +257,7 @@ app.get("/api/config", (req, res) => {
   });
 });
 
-app.get("/api/speech-token", async (req, res) => {
+app.get("/api/speech-token", requireApproved, async (req, res) => {
   try {
     const t = await getSpeechToken();
     res.json({ token: t.value, region: SPEECH_REGION, expiresOn: t.expiresOnMs });
@@ -154,7 +268,7 @@ app.get("/api/speech-token", async (req, res) => {
 });
 
 // Server-side relay (ICE) token for the real-time avatar WebRTC peer connection.
-app.get("/api/relay-token", async (req, res) => {
+app.get("/api/relay-token", requireApproved, async (req, res) => {
   try {
     const t = await getSpeechToken();
     const url = `https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`;
@@ -227,7 +341,7 @@ async function runAgent(tid) {
   return run;
 }
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", requireApproved, async (req, res) => {
   const { message, threadId } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   try {
@@ -243,6 +357,9 @@ app.post("/api/chat", async (req, res) => {
     for await (const m of list) {
       if (m.role === "assistant") { ({ text: reply, citations } = renderAssistantMessage(m)); break; }
     }
+    // Capture usage (don't log raw system directives verbatim — just the kind).
+    const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
+    logUsage(req.authUser.login, "chat", kind);
     res.json({ threadId: tid, reply, citations });
   } catch (err) {
     console.error("chat error:", err);
@@ -253,5 +370,6 @@ app.post("/api/chat", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🛰  Hubble running at http://localhost:${PORT}`);
   console.log(`   Agent: ${AGENT_ID}`);
-  console.log(`   Speech region: ${SPEECH_REGION} (keyless AAD)\n`);
+  console.log(`   Speech region: ${SPEECH_REGION} (keyless AAD)`);
+  console.log(`   Auth: ${DEV_MODE ? "DEV MODE (no OAuth App) — simulated GitHub login" : "GitHub OAuth"} | admins: ${ADMIN_LOGINS.join(", ")}\n`);
 });

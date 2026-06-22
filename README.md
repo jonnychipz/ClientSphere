@@ -56,6 +56,13 @@ Hubble can use **your own face and voice** as the avatar via Azure's Custom Phot
 
 The app is **already wired**: set the `CUSTOM_*` values in `.env` and a **"⭐ You (custom)"** preset appears in the Voice & body picker (`avatarConfig.customized`, `photoAvatarBaseModel`, and your custom voice). Full kit — consent scripts, photo spec, voice recording guide, and a step-by-step submission/training guide — is in **`custom-avatar/`**.
 
+## Sign-in & access control
+Hubble is gated behind **GitHub sign-in** with an **admin approval** workflow:
+- Users **sign in with GitHub**; new users land in a **pending** state until approved.
+- The admin (**jonnychipz**) reviews sign-ups in an **admin dashboard** (`/admin`) and **approves / denies / revokes** access.
+- All **usage is captured** (logins, chats, admin decisions) and shown as KPIs, per-user stats and an activity feed.
+- A **dev mode** lets you test the whole flow locally before creating an OAuth App. See **`AUTH-SETUP.md`**.
+
 ## Project layout
 ```
 .

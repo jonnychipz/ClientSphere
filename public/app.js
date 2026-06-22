@@ -28,6 +28,7 @@ const els = {
   roleplayBanner: document.getElementById("roleplayBanner"),
   roleplayLabel: document.getElementById("roleplayLabel"),
   roleplayEndBtn: document.getElementById("roleplayEndBtn"),
+  userChip: document.getElementById("userChip"),
   audio: document.getElementById("avatarAudio"),
   idle: document.getElementById("avatarIdle"),
   status: document.getElementById("avatarStatus"),
@@ -705,9 +706,26 @@ function emailRecap() {
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
+// ---------- signed-in user chip ----------
+async function renderUser() {
+  try {
+    const r = await fetch("/api/me");
+    if (!r.ok) { location.href = "/login"; return; }
+    const u = await r.json();
+    const adminLink = u.isAdmin ? `<a class="admin-link" href="/admin" title="Admin dashboard">Admin</a>` : "";
+    els.userChip.innerHTML =
+      `<img src="${u.avatar || "favicon.svg"}" alt="" onerror="this.src='favicon.svg'"/>` +
+      `<span class="uc-name" title="@${u.login}">${u.name || u.login}</span>` +
+      adminLink +
+      `<a href="/auth/logout">Sign out</a>`;
+    els.userChip.hidden = false;
+  } catch { /* ignore */ }
+}
+
 // ---------- init ----------
 async function init() {
   if (!SDK) { toast("Speech SDK failed to load."); }
+  renderUser();
   const r = await fetch("/api/config");
   state.cfg = await r.json();
   state.green = state.cfg.avatarGreen || state.green;

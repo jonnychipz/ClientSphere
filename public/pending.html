@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Access pending — Hubble</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+</head>
+<body>
+  <div class="auth-card">
+    <div class="status-icon">⏳</div>
+    <span class="pill pending">Awaiting approval</span>
+    <h1 style="font-size:24px;letter-spacing:2px;">HUBBLE</h1>
+    <p class="muted" id="who"></p>
+    <p class="muted">Thanks for signing up! Your request to use Hubble is <b>pending review</b> by an admin. You'll get access as soon as it's approved — try again shortly.</p>
+    <a class="gh-btn" href="/" style="margin-top:18px;">Check again</a>
+    <a class="link-btn" href="/auth/logout">Sign out</a>
+  </div>
+  <script>
+    fetch("/api/me").then(r => r.ok ? r.json() : null).then(u => {
+      if (u) document.getElementById("who").textContent = `Signed in as ${u.name} (@${u.login}).`;
+      if (u && u.status === "approved") location.href = "/";
+      if (u && u.status === "denied") location.href = "/denied";
+    });
+  </script>
+</body>
+</html>
