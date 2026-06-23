@@ -16,6 +16,7 @@ import {
 import {
   initStore, STORAGE_MODE, getUser, upsertUser, setStatus, setAdmin, deleteUser,
   listUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken, peekToken,
+  getSetting, setSetting,
 } from "./store.mjs";
 import {
   EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision,
@@ -123,29 +124,61 @@ async function getSpeechToken() {
   return cachedToken;
 }
 
-// ---- Custom avatar + voice (your likeness), enabled via .env once trained ----
-const customAvatarChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
+// ---- Custom avatars + voice (your likeness), enabled via .env once trained ----
+// Shared custom VOICE (personal voice or CNV) that all custom avatars speak with.
 const customVoiceName = (process.env.CUSTOM_VOICE_NAME || "").trim();
 const customVoiceEndpoint = (process.env.CUSTOM_VOICE_ENDPOINT_ID || "").trim();
 const customVoiceProfileId = (process.env.CUSTOM_VOICE_PROFILE_ID || "").trim();
 const customVoiceBaseModel = (process.env.CUSTOM_VOICE_BASE_MODEL || "DragonLatestNeural").trim();
-const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarChar || customVoiceName || customVoiceProfileId))
-  ? {
-      enabled: true,
+const customGender = (process.env.CUSTOM_AVATAR_GENDER || "male").toLowerCase() === "female" ? "female" : "male";
+const customPhotoModel = (process.env.CUSTOM_AVATAR_PHOTO_MODEL || "").trim();
+const sharedVoice = {
+  voice: customVoiceName,
+  voiceEndpointId: customVoiceEndpoint,
+  voiceProfileId: customVoiceProfileId,
+  voiceBaseModel: customVoiceBaseModel,
+  bodyCharacter: (process.env.CUSTOM_BODY_CHARACTER || "harry").trim(),
+  bodyStyle: (process.env.CUSTOM_BODY_STYLE || "business").trim(),
+};
+
+// One or more custom avatar faces, all paired with the shared custom voice.
+// CUSTOM_AVATARS is a JSON array: [{ id, label, character, photoModel?, gender?, style? }].
+// For backwards-compat, a single CUSTOM_AVATAR_CHARACTER (+_LABEL) is also accepted.
+function parseCustomAvatars() {
+  const out = [];
+  const raw = (process.env.CUSTOM_AVATARS || "").trim();
+  if (raw) {
+    try {
+      for (const a of JSON.parse(raw)) {
+        if (!a || !a.character) continue;
+        out.push({
+          id: String(a.id || a.character),
+          label: a.label || a.character,
+          character: String(a.character).trim(),
+          style: (a.style || "").trim(),
+          photoModel: (a.photoModel || customPhotoModel || "").trim(),
+          gender: (a.gender || customGender).toLowerCase() === "female" ? "female" : "male",
+        });
+      }
+    } catch (e) { console.error("CUSTOM_AVATARS parse error:", e.message); }
+  }
+  const singleChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
+  if (singleChar && !out.some((a) => a.character === singleChar)) {
+    out.unshift({
+      id: singleChar,
       label: process.env.CUSTOM_AVATAR_LABEL || "You (custom)",
-      gender: (process.env.CUSTOM_AVATAR_GENDER || "male").toLowerCase() === "female" ? "female" : "male",
-      character: customAvatarChar,                       // custom video/photo avatar model name (your face)
+      character: singleChar,
       style: (process.env.CUSTOM_AVATAR_STYLE || "").trim(),
-      photoModel: (process.env.CUSTOM_AVATAR_PHOTO_MODEL || "").trim(), // e.g. "vasa-1" for photo avatar
-      // Standard avatar body paired with the custom voice while no custom face exists yet:
-      bodyCharacter: (process.env.CUSTOM_BODY_CHARACTER || "harry").trim(),
-      bodyStyle: (process.env.CUSTOM_BODY_STYLE || "business").trim(),
-      voice: customVoiceName,                            // Custom Neural Voice name (e.g. en-GB-JonnychipzNeural)
-      voiceEndpointId: customVoiceEndpoint,              // CNV deployment/endpoint id (required for custom voices)
-      voiceProfileId: customVoiceProfileId,              // Personal voice speakerProfileId (GUID) — used instead of a CNV
-      voiceBaseModel: customVoiceBaseModel,              // base model voice carrying the personal voice (e.g. DragonLatestNeural)
-    }
-  : null;
+      photoModel: customPhotoModel,
+      gender: customGender,
+    });
+  }
+  return out;
+}
+const CUSTOM_ENABLED = process.env.CUSTOM_AVATAR_ENABLED === "true";
+const CUSTOM_AVATARS = CUSTOM_ENABLED ? parseCustomAvatars().map((a) => ({ ...a, ...sharedVoice })) : [];
+// Default visibility = all visible; admins can hide/show via the admin portal.
+const SETTINGS_AVATAR_VIS = "avatarVisibility"; // { [avatarId]: boolean }
 
 const app = express();
 app.set("trust proxy", 1); // App Service terminates TLS at a proxy; trust X-Forwarded-Proto/Host
@@ -430,7 +463,18 @@ app.post("/admin/action", async (req, res) => {
   res.send(actionPage(`Access ${word}`, `<b>@${login}</b> has been <b>${word}</b>${u.email ? ` and notified at ${u.email}` : ""}.`, true));
 });
 
-app.get("/api/config", (req, res) => {
+// Helper: apply admin visibility to the custom avatar list. `forAdmin` keeps the
+// hidden ones (with a .hidden flag) for the admin UI; end users only see visible.
+async function customAvatarsView(forAdmin = false) {
+  if (!CUSTOM_AVATARS.length) return [];
+  const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
+  return CUSTOM_AVATARS
+    .map((a) => ({ ...a, hidden: vis[a.id] === false }))
+    .filter((a) => forAdmin || !a.hidden);
+}
+
+app.get("/api/config", async (req, res) => {
+  const customList = await customAvatarsView(false);
   res.json({
     agentName: "Hubble",
     tagline: "Your AI GitHub sales coach",
@@ -438,10 +482,27 @@ app.get("/api/config", (req, res) => {
     voices: VOICES,
     backgrounds: BACKGROUNDS,
     resources: RESOURCES,
-    custom: CUSTOM,
+    // Back-compat: `custom` is the first visible custom avatar (older client);
+    // `customAvatars` is the full visible list (new client).
+    custom: customList[0] || null,
+    customAvatars: customList,
     avatarGreen: AVATAR_GREEN,
   });
 });
+
+// ---- admin: list custom avatars (incl. hidden) + toggle visibility ----
+app.get("/api/admin/avatars", requireAdmin(async (req, res) => {
+  res.json({ avatars: await customAvatarsView(true) });
+}));
+app.post("/api/admin/avatars/visibility", requireAdmin(async (req, res) => {
+  const { id, visible } = req.body || {};
+  if (!id || !CUSTOM_AVATARS.some((a) => a.id === id)) return res.status(404).json({ error: "unknown avatar" });
+  const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
+  vis[id] = !!visible;
+  await setSetting(SETTINGS_AVATAR_VIS, vis);
+  await log("info", `Avatar ${visible ? "shown" : "hidden"}`, `${id} by @${req.authUser.login}`);
+  res.json({ ok: true, avatars: await customAvatarsView(true) });
+}));
 
 app.get("/api/speech-token", requireApproved(async (req, res) => {
   try {

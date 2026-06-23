@@ -31,7 +31,7 @@ let tables = null;
 async function initTables() {
   const cred = new DefaultAzureCredential();
   const svc = new TableServiceClient(TABLE_ENDPOINT, cred);
-  for (const t of ["HubbleUsers", "HubbleUsage", "HubbleLogs", "HubbleTokens"]) {
+  for (const t of ["HubbleUsers", "HubbleUsage", "HubbleLogs", "HubbleTokens", "HubbleSettings"]) {
     try { await svc.createTable(t); } catch { /* exists */ }
   }
   tables = {
@@ -39,6 +39,7 @@ async function initTables() {
     usage: new TableClient(TABLE_ENDPOINT, "HubbleUsage", cred),
     logs: new TableClient(TABLE_ENDPOINT, "HubbleLogs", cred),
     tokens: new TableClient(TABLE_ENDPOINT, "HubbleTokens", cred),
+    settings: new TableClient(TABLE_ENDPOINT, "HubbleSettings", cred),
   };
 }
 
@@ -47,8 +48,8 @@ async function initTables() {
 // ----------------------------------------------------------------------------
 const DATA_DIR = path.join(__dirname, "data");
 const FILE = path.join(DATA_DIR, "store.json");
-let mem = { users: {}, usage: [], logs: [], tokens: {} };
-function fileLoad() { try { mem = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { /* fresh */ } mem.logs = mem.logs || []; mem.tokens = mem.tokens || {}; }
+let mem = { users: {}, usage: [], logs: [], tokens: {}, settings: {} };
+function fileLoad() { try { mem = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { /* fresh */ } mem.logs = mem.logs || []; mem.tokens = mem.tokens || {}; mem.settings = mem.settings || {}; }
 function fileSave() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(mem, null, 2)); }
 
 export async function initStore() {
@@ -245,4 +246,26 @@ export async function peekToken(id) {
     used: !!e.used,
     expired: Math.floor(Date.now() / 1000) > e.exp,
   };
+}
+
+// ----------------------------------------------------------------------------
+// Settings (small admin-controlled key/value JSON blobs)
+// ----------------------------------------------------------------------------
+export async function getSetting(key, fallback = null) {
+  if (STORAGE_MODE === "table") {
+    try {
+      const e = await tables.settings.getEntity("settings", key);
+      return e.json ? JSON.parse(e.json) : fallback;
+    } catch { return fallback; }
+  }
+  return key in mem.settings ? mem.settings[key] : fallback;
+}
+
+export async function setSetting(key, value) {
+  if (STORAGE_MODE === "table") {
+    await tables.settings.upsertEntity({ partitionKey: "settings", rowKey: key, json: JSON.stringify(value) }, "Replace");
+  } else {
+    mem.settings[key] = value; fileSave();
+  }
+  return value;
 }

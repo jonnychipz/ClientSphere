@@ -501,26 +501,31 @@ function currentVoiceObj() {
 }
 // Resolve the selected dropdown value into the actual SSML voice + avatar body.
 function applySelection() {
-  const c = state.cfg.custom;
-  if (state.voiceSel === CUSTOM_VAL && c) {
-    const fallback = state.cfg.voices[c.gender || state.gender][0];
-    // Use the custom FACE avatar if trained; otherwise the configured standard body.
-    state.body = c.character
-      ? { character: c.character, style: c.style || "", customized: true, photoModel: c.photoModel || "" }
-      : { character: c.bodyCharacter || fallback.character, style: c.bodyStyle || fallback.style };
-    if (c.voiceProfileId) {
-      // Personal voice: a base model voice carries your cloned speaker profile via
-      // SSML <mstts:ttsembedding>. No endpoint id (treated like a prebuilt voice).
-      state.voiceProfileId = c.voiceProfileId;
-      state.voice = c.voiceBaseModel || "DragonLatestNeural";
-      state.voiceEndpointId = "";
-    } else {
-      // Custom Neural Voice: a real voice name + its deployment endpoint id.
-      state.voiceProfileId = "";
-      state.voice = c.voice || fallback.id;
-      state.voiceEndpointId = c.voiceEndpointId || "";
+  // Custom avatars use values like "__custom__:<id>"; find the matching one.
+  if (typeof state.voiceSel === "string" && state.voiceSel.startsWith(CUSTOM_VAL)) {
+    const id = state.voiceSel.slice(CUSTOM_VAL.length + 1);
+    const list = state.cfg.customAvatars || (state.cfg.custom ? [state.cfg.custom] : []);
+    const c = list.find((a) => (a.id || a.character) === id) || list[0];
+    if (c) {
+      const fallback = state.cfg.voices[c.gender || state.gender][0];
+      // Use the custom FACE avatar if trained; otherwise the configured standard body.
+      state.body = c.character
+        ? { character: c.character, style: c.style || "", customized: true, photoModel: c.photoModel || "" }
+        : { character: c.bodyCharacter || fallback.character, style: c.bodyStyle || fallback.style };
+      if (c.voiceProfileId) {
+        // Personal voice: a base model voice carries the cloned speaker profile via
+        // SSML <mstts:ttsembedding>. No endpoint id (treated like a prebuilt voice).
+        state.voiceProfileId = c.voiceProfileId;
+        state.voice = c.voiceBaseModel || "DragonLatestNeural";
+        state.voiceEndpointId = "";
+      } else {
+        // Custom Neural Voice: a real voice name + its deployment endpoint id.
+        state.voiceProfileId = "";
+        state.voice = c.voice || fallback.id;
+        state.voiceEndpointId = c.voiceEndpointId || "";
+      }
+      return;
     }
-    return;
   }
   const v = currentVoiceObj();
   state.voiceSel = v.id;
@@ -532,21 +537,25 @@ function applySelection() {
 function populateVoices() {
   const list = state.cfg.voices[state.gender];
   els.voiceSelect.innerHTML = "";
-  // The custom "You" preset is gender-specific — only show it for its own gender
-  // (e.g. the male Jonnychipz avatar shouldn't appear in the Female list).
-  if (state.cfg.custom && state.cfg.custom.gender === state.gender) {
+  // Custom avatar presets are gender-specific — only show those for the current
+  // gender (e.g. the male Jonnychipz avatars don't appear in the Female list).
+  const customList = state.cfg.customAvatars || (state.cfg.custom ? [state.cfg.custom] : []);
+  let firstCustomVal = null;
+  customList.filter((a) => (a.gender || "male") === state.gender).forEach((a) => {
     const opt = document.createElement("option");
-    opt.value = CUSTOM_VAL;
-    opt.textContent = "⭐ " + state.cfg.custom.label;
+    const val = CUSTOM_VAL + ":" + (a.id || a.character);
+    opt.value = val;
+    opt.textContent = "⭐ " + (a.label || a.character);
     els.voiceSelect.appendChild(opt);
-  }
+    if (!firstCustomVal) firstCustomVal = val;
+  });
   list.forEach((v) => {
     const opt = document.createElement("option");
     opt.value = v.id;
     opt.textContent = v.label;
     els.voiceSelect.appendChild(opt);
   });
-  state.voiceSel = list[0].id;
+  state.voiceSel = firstCustomVal || list[0].id;
   els.voiceSelect.value = state.voiceSel;
   applySelection();
 }

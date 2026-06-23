@@ -44,17 +44,45 @@ function rowActions(u) {
   return `<div class="row-actions">${b.join("")}</div>`;
 }
 
+async function toggleAvatar(id, visible) {
+  const res = await api("/api/admin/avatars/visibility", { id, visible });
+  if (res) { toast(`Avatar ${visible ? "shown to users" : "hidden"}`); renderAvatars(res.avatars || []); }
+}
+function renderAvatars(avatars) {
+  const card = el("avatarsCard");
+  if (!avatars.length) { if (card) card.hidden = true; return; }
+  if (card) card.hidden = false;
+  el("avatarsGrid").innerHTML = avatars.map((a) => {
+    const on = !a.hidden;
+    return `<div class="avatar-item ${on ? "on" : "off"}">
+      <div class="ai-info">
+        <div class="ai-name">⭐ ${esc(a.label || a.character)}</div>
+        <div class="ai-meta">${esc(a.character)}${a.photoModel ? ` · ${esc(a.photoModel)}` : ""} · ${esc(a.gender || "male")}</div>
+      </div>
+      <label class="ai-switch" title="${on ? "Visible to users" : "Hidden"}">
+        <input type="checkbox" ${on ? "checked" : ""} data-id="${esc(a.id)}"/>
+        <span class="ai-slider"></span>
+        <span class="ai-label">${on ? "Shown" : "Hidden"}</span>
+      </label>
+    </div>`;
+  }).join("");
+  el("avatarsGrid").querySelectorAll("input[type=checkbox]").forEach((cb) =>
+    cb.addEventListener("change", () => toggleAvatar(cb.dataset.id, cb.checked)));
+}
+
 async function load() {
   const me = await fetch("/api/me").then((r) => (r.ok ? r.json() : null));
   if (!me || !me.isAdmin) { location.href = "/login"; return; }
   el("adminWho").textContent = `Signed in as ${me.name} (@${me.login}) — admin`;
 
-  const [uRes, gRes, lRes] = await Promise.all([
+  const [uRes, gRes, lRes, aRes] = await Promise.all([
     fetch("/api/admin/users").then((r) => r.json()),
     fetch("/api/admin/usage").then((r) => r.json()),
     fetch("/api/admin/logs").then((r) => r.json()),
+    fetch("/api/admin/avatars").then((r) => r.json()).catch(() => ({ avatars: [] })),
   ]);
   const users = uRes.users || [];
+  renderAvatars(aRes.avatars || []);
 
   const pending = users.filter((u) => u.status === "pending").length;
   const approved = users.filter((u) => u.status === "approved").length;
