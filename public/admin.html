@@ -37,8 +37,17 @@
     </section>
 
     <section class="card" id="avatarsCard" hidden>
-      <div class="card-head"><h2>Avatars</h2><span class="muted">show or hide custom avatars from end users</span></div>
-      <div class="avatar-grid" id="avatarsGrid"></div>
+      <div class="card-head"><h2>Avatars &amp; voices</h2><span class="muted">tick the avatars/voices end users can choose</span></div>
+      <div class="avatar-cols">
+        <div class="avatar-col">
+          <h3 class="avatar-col-title">Female</h3>
+          <div class="avatar-checks" id="avatarsFemale"></div>
+        </div>
+        <div class="avatar-col">
+          <h3 class="avatar-col-title">Male</h3>
+          <div class="avatar-checks" id="avatarsMale"></div>
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -53,11 +62,13 @@
       <div class="table-wrap"><table id="logsTable"><thead><tr>
         <th>Time</th><th>Level</th><th>Event</th><th>Detail</th>
       </tr></thead><tbody id="logsBody"></tbody></table></div>
+      <div class="pager" id="logsPager"></div>
     </section>
 
     <section class="card">
       <div class="card-head"><h2>Recent activity</h2></div>
       <div class="feed" id="feed"></div>
+      <div class="pager" id="feedPager"></div>
     </section>
   </main>
 

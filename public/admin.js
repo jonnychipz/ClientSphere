@@ -46,28 +46,56 @@ function rowActions(u) {
 
 async function toggleAvatar(id, visible) {
   const res = await api("/api/admin/avatars/visibility", { id, visible });
-  if (res) { toast(`Avatar ${visible ? "shown to users" : "hidden"}`); renderAvatars(res.avatars || []); }
+  if (res) { toast(`${visible ? "Shown to users" : "Hidden"}`); renderAvatars(res); }
 }
-function renderAvatars(avatars) {
+function avatarCheckRow(a) {
+  const star = a.kind === "custom" ? "⭐ " : "";
+  const meta = a.kind === "custom"
+    ? `${esc(a.character || "")}${a.photoModel ? " · " + esc(a.photoModel) : ""}`
+    : "built-in voice";
+  return `<label class="av-check ${a.hidden ? "" : "on"}">
+    <input type="checkbox" ${a.hidden ? "" : "checked"} data-id="${esc(a.id)}"/>
+    <span class="av-box"></span>
+    <span class="av-text"><span class="av-name">${star}${esc(a.label || a.id)}</span><span class="av-meta">${meta}</span></span>
+  </label>`;
+}
+function renderAvatars(data) {
+  const female = (data && data.female) || [];
+  const male = (data && data.male) || [];
   const card = el("avatarsCard");
-  if (!avatars.length) { if (card) card.hidden = true; return; }
+  if (!female.length && !male.length) { if (card) card.hidden = true; return; }
   if (card) card.hidden = false;
-  el("avatarsGrid").innerHTML = avatars.map((a) => {
-    const on = !a.hidden;
-    return `<div class="avatar-item ${on ? "on" : "off"}">
-      <div class="ai-info">
-        <div class="ai-name">⭐ ${esc(a.label || a.character)}</div>
-        <div class="ai-meta">${esc(a.character)}${a.photoModel ? ` · ${esc(a.photoModel)}` : ""} · ${esc(a.gender || "male")}</div>
-      </div>
-      <label class="ai-switch" title="${on ? "Visible to users" : "Hidden"}">
-        <input type="checkbox" ${on ? "checked" : ""} data-id="${esc(a.id)}"/>
-        <span class="ai-slider"></span>
-        <span class="ai-label">${on ? "Shown" : "Hidden"}</span>
-      </label>
-    </div>`;
-  }).join("");
-  el("avatarsGrid").querySelectorAll("input[type=checkbox]").forEach((cb) =>
+  el("avatarsFemale").innerHTML = female.map(avatarCheckRow).join("") || '<div class="muted">None</div>';
+  el("avatarsMale").innerHTML = male.map(avatarCheckRow).join("") || '<div class="muted">None</div>';
+  el("avatarsCard").querySelectorAll("input[type=checkbox]").forEach((cb) =>
     cb.addEventListener("change", () => toggleAvatar(cb.dataset.id, cb.checked)));
+}
+
+// Client-side pagination state (preserved across the 20s auto-reload).
+const PAGE_SIZE = 15;
+const pager = { logs: 0, feed: 0 };
+function renderPaged(containerId, pagerKey, items, rowHtml, emptyHtml) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (pager[pagerKey] >= pages) pager[pagerKey] = pages - 1;
+  if (pager[pagerKey] < 0) pager[pagerKey] = 0;
+  const start = pager[pagerKey] * PAGE_SIZE;
+  const slice = items.slice(start, start + PAGE_SIZE);
+  const body = el(containerId);
+  body.innerHTML = slice.length ? slice.map(rowHtml).join("") : emptyHtml;
+  const meta = el(pagerKey + "Pager");
+  if (meta) {
+    if (total <= PAGE_SIZE) { meta.innerHTML = ""; return; }
+    const from = start + 1, to = Math.min(start + PAGE_SIZE, total);
+    meta.innerHTML =
+      `<button class="pg-btn" data-k="${pagerKey}" data-d="-1" ${pager[pagerKey] === 0 ? "disabled" : ""}>‹ Prev</button>` +
+      `<span class="pg-info">${from}–${to} of ${total}</span>` +
+      `<button class="pg-btn" data-k="${pagerKey}" data-d="1" ${pager[pagerKey] >= pages - 1 ? "disabled" : ""}>Next ›</button>`;
+    meta.querySelectorAll("button.pg-btn").forEach((b) => b.addEventListener("click", () => {
+      pager[b.dataset.k] += parseInt(b.dataset.d, 10);
+      window._lastData && window._lastData();
+    }));
+  }
 }
 
 async function load() {
@@ -79,10 +107,10 @@ async function load() {
     fetch("/api/admin/users").then((r) => r.json()),
     fetch("/api/admin/usage").then((r) => r.json()),
     fetch("/api/admin/logs").then((r) => r.json()),
-    fetch("/api/admin/avatars").then((r) => r.json()).catch(() => ({ avatars: [] })),
+    fetch("/api/admin/avatars").then((r) => r.json()).catch(() => ({ female: [], male: [] })),
   ]);
   const users = uRes.users || [];
-  renderAvatars(aRes.avatars || []);
+  renderAvatars(aRes);
 
   const pending = users.filter((u) => u.status === "pending").length;
   const approved = users.filter((u) => u.status === "approved").length;
@@ -125,18 +153,20 @@ async function load() {
   `).join("") || `<tr><td colspan="4" class="muted" style="padding:20px;">No usage yet.</td></tr>`;
 
   const logs = lRes.logs || [];
-  el("logsBody").innerHTML = logs.map((e) => `
-    <tr><td class="muted" style="white-space:nowrap;">${new Date(e.ts).toLocaleString()}</td>
+  renderPaged("logsBody", "logs", logs,
+    (e) => `<tr><td class="muted" style="white-space:nowrap;">${new Date(e.ts).toLocaleString()}</td>
     <td><span class="badge ${e.level === "warn" ? "denied" : e.level === "error" ? "denied" : "approved"}">${esc(e.level)}</span></td>
-    <td>${esc(e.message)}</td><td class="muted">${esc(e.detail)}</td></tr>
-  `).join("") || `<tr><td colspan="4" class="muted" style="padding:20px;">No logs yet.</td></tr>`;
+    <td>${esc(e.message)}</td><td class="muted">${esc(e.detail)}</td></tr>`,
+    `<tr><td colspan="4" class="muted" style="padding:20px;">No logs yet.</td></tr>`);
 
-  el("feed").innerHTML = (gRes.recent || []).slice(0, 40).map((e) => `
-    <div class="feed-row"><span class="t">${new Date(e.ts).toLocaleString()}</span>
+  const recent = gRes.recent || [];
+  renderPaged("feed", "feed", recent,
+    (e) => `<div class="feed-row"><span class="t">${new Date(e.ts).toLocaleString()}</span>
     <span class="a">${esc(e.action)}</span>
-    <span>@${esc(e.login)}${e.detail ? ` · ${esc(e.detail)}` : ""}</span></div>
-  `).join("") || `<div class="muted" style="padding:8px 0;">No activity yet.</div>`;
+    <span>@${esc(e.login)}${e.detail ? ` · ${esc(e.detail)}` : ""}</span></div>`,
+    `<div class="muted" style="padding:8px 0;">No activity yet.</div>`);
 }
+window._lastData = load;
 
 load();
 setInterval(load, 20000);

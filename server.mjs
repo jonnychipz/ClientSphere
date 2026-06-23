@@ -474,14 +474,54 @@ app.post("/admin/action", async (req, res) => {
   res.send(actionPage(`Access ${word}`, `<b>@${login}</b> has been <b>${word}</b>${u.email ? ` and notified at ${u.email}` : ""}.`, true));
 });
 
-// Helper: apply admin visibility to the custom avatar list. `forAdmin` keeps the
-// hidden ones (with a .hidden flag) for the admin UI; end users only see visible.
+// ---- Avatar / voice visibility (built-in voices + custom avatars) ----
+// Visibility is one flat map { [id]: boolean } in settings; default = visible.
+// IDs are built-in voice ids (e.g. "en-GB-SoniaNeural") and custom avatar ids
+// (e.g. "jonnychipz"). An empty gender list would break the picker, so the
+// end-user views fall back to "all visible for that gender" if everything is off.
+function isVisible(vis, id) { return vis[id] !== false; }
+
 async function customAvatarsView(forAdmin = false) {
   if (!CUSTOM_AVATARS.length) return [];
   const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
-  return CUSTOM_AVATARS
-    .map((a) => ({ ...a, hidden: vis[a.id] === false }))
-    .filter((a) => forAdmin || !a.hidden);
+  const all = CUSTOM_AVATARS.map((a) => ({ ...a, hidden: !isVisible(vis, a.id) }));
+  if (forAdmin) return all;
+  const visible = all.filter((a) => !a.hidden);
+  return visible; // may be empty; that's fine — built-in voices still exist
+}
+
+// End-user voices filtered by visibility, with empty-guard per gender.
+async function voicesView() {
+  const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
+  const out = {};
+  for (const g of ["female", "male"]) {
+    const filtered = (VOICES[g] || []).filter((v) => isVisible(vis, v.id));
+    out[g] = filtered.length ? filtered : (VOICES[g] || []); // never leave a gender empty
+  }
+  return out;
+}
+
+// Admin view: built-in voices + custom avatars grouped by gender, with hidden flags.
+async function avatarAdminView() {
+  const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
+  const group = (g) => {
+    const builtins = (VOICES[g] || []).map((v) => ({
+      id: v.id, label: v.label, kind: "builtin", gender: g, hidden: !isVisible(vis, v.id),
+    }));
+    const customs = CUSTOM_AVATARS.filter((a) => a.gender === g).map((a) => ({
+      id: a.id, label: a.label, kind: "custom", gender: g, character: a.character,
+      photoModel: a.photoModel, hidden: !isVisible(vis, a.id),
+    }));
+    return [...customs, ...builtins];
+  };
+  return { female: group("female"), male: group("male") };
+}
+// All valid visibility ids (built-in voice ids + custom avatar ids).
+function allVisibilityIds() {
+  return new Set([
+    ...Object.values(VOICES).flat().map((v) => v.id),
+    ...CUSTOM_AVATARS.map((a) => a.id),
+  ]);
 }
 
 app.get("/api/config", async (req, res) => {
@@ -490,7 +530,7 @@ app.get("/api/config", async (req, res) => {
     agentName: "Hubble",
     tagline: "Your AI GitHub sales coach",
     speechRegion: SPEECH_REGION,
-    voices: VOICES,
+    voices: await voicesView(),
     backgrounds: BACKGROUNDS,
     resources: RESOURCES,
     // Back-compat: `custom` is the first visible custom avatar (older client);
@@ -501,18 +541,18 @@ app.get("/api/config", async (req, res) => {
   });
 });
 
-// ---- admin: list custom avatars (incl. hidden) + toggle visibility ----
+// ---- admin: list all avatars/voices (incl. hidden) + toggle visibility ----
 app.get("/api/admin/avatars", requireAdmin(async (req, res) => {
-  res.json({ avatars: await customAvatarsView(true) });
+  res.json(await avatarAdminView());
 }));
 app.post("/api/admin/avatars/visibility", requireAdmin(async (req, res) => {
   const { id, visible } = req.body || {};
-  if (!id || !CUSTOM_AVATARS.some((a) => a.id === id)) return res.status(404).json({ error: "unknown avatar" });
+  if (!id || !allVisibilityIds().has(id)) return res.status(404).json({ error: "unknown avatar/voice" });
   const vis = (await getSetting(SETTINGS_AVATAR_VIS, {})) || {};
   vis[id] = !!visible;
   await setSetting(SETTINGS_AVATAR_VIS, vis);
-  await log("info", `Avatar ${visible ? "shown" : "hidden"}`, `${id} by @${req.authUser.login}`);
-  res.json({ ok: true, avatars: await customAvatarsView(true) });
+  await log("info", `Voice/avatar ${visible ? "shown" : "hidden"}`, `${id} by @${req.authUser.login}`);
+  res.json({ ok: true, ...(await avatarAdminView()) });
 }));
 
 app.get("/api/speech-token", requireApproved(async (req, res) => {
