@@ -532,8 +532,9 @@ function applySelection() {
 function populateVoices() {
   const list = state.cfg.voices[state.gender];
   els.voiceSelect.innerHTML = "";
-  // "You (custom)" preset appears once custom assets are configured in .env.
-  if (state.cfg.custom) {
+  // The custom "You" preset is gender-specific — only show it for its own gender
+  // (e.g. the male Jonnychipz avatar shouldn't appear in the Female list).
+  if (state.cfg.custom && state.cfg.custom.gender === state.gender) {
     const opt = document.createElement("option");
     opt.value = CUSTOM_VAL;
     opt.textContent = "⭐ " + state.cfg.custom.label;
