@@ -148,19 +148,30 @@ function parseCustomAvatars() {
   const out = [];
   const raw = (process.env.CUSTOM_AVATARS || "").trim();
   if (raw) {
-    try {
-      for (const a of JSON.parse(raw)) {
-        if (!a || !a.character) continue;
-        out.push({
-          id: String(a.id || a.character),
-          label: a.label || a.character,
-          character: String(a.character).trim(),
-          style: (a.style || "").trim(),
-          photoModel: (a.photoModel || customPhotoModel || "").trim(),
-          gender: (a.gender || customGender).toLowerCase() === "female" ? "female" : "male",
-        });
-      }
-    } catch (e) { console.error("CUSTOM_AVATARS parse error:", e.message); }
+    let arr = null;
+    // Preferred: JSON array. But Azure/Windows shells often strip the quotes, so
+    // we also accept a quote-free delimited form:
+    //   id|Label|character|photoModel|gender|style ; id2|Label2|character2 ...
+    if (raw.startsWith("[")) {
+      try { arr = JSON.parse(raw); } catch { arr = null; }
+    }
+    if (!arr) {
+      arr = raw.split(";").map((s) => s.trim()).filter(Boolean).map((seg) => {
+        const [id, label, character, photoModel, gender, style] = seg.split("|").map((x) => (x || "").trim());
+        return { id, label, character: character || id, photoModel, gender, style };
+      });
+    }
+    for (const a of arr) {
+      if (!a || !a.character) continue;
+      out.push({
+        id: String(a.id || a.character),
+        label: a.label || a.character,
+        character: String(a.character).trim(),
+        style: (a.style || "").trim(),
+        photoModel: (a.photoModel || customPhotoModel || "").trim(),
+        gender: (a.gender || customGender).toLowerCase() === "female" ? "female" : "male",
+      });
+    }
   }
   const singleChar = (process.env.CUSTOM_AVATAR_CHARACTER || "").trim();
   if (singleChar && !out.some((a) => a.character === singleChar)) {
