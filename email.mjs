@@ -16,20 +16,54 @@ const PURPLE_LT = "#a78bfa";
 const INK = "#14101f";
 const esc = (s) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-async function send(to, subject, html) {
+async function send(to, subject, html, attachments) {
   if (!EMAIL_ENABLED) { console.log(`[email disabled] would send "${subject}" to ${to}`); return false; }
   if (!to) { console.log(`[email] no recipient for "${subject}"`); return false; }
   try {
-    const poller = await client.beginSend({
+    const message = {
       senderAddress: SENDER,
       content: { subject, html },
       recipients: { to: [{ address: to }] },
-    });
+    };
+    if (attachments && attachments.length) message.attachments = attachments;
+    const poller = await client.beginSend(message);
     await poller.pollUntilDone();
     return true;
   } catch (err) {
     console.error("email send error:", err.message);
     return false;
+  }
+}
+
+// Build an avatar block for the email. Remote images (e.g. GitHub avatars) are
+// blocked by default in many corporate mail clients, so we fetch the image
+// server-side and embed it INLINE as a CID attachment. Falls back to an
+// initials circle if the avatar can't be fetched. Returns { html, attachment }.
+async function avatarBlock(user, sizePx = 56) {
+  const initials = (user.name || user.login || "?")
+    .split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
+  const fallback = `<div style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;border:2px solid ${PURPLE};background:linear-gradient(145deg,#2a2150,#140f26);color:#d8c9ff;font-weight:700;font-size:${Math.round(sizePx/2.4)}px;line-height:${sizePx}px;text-align:center;">${esc(initials)}</div>`;
+  let url = user.avatar || "";
+  if (!url) return { html: fallback, attachment: null };
+  // Ask GitHub for an appropriately sized avatar.
+  if (/githubusercontent\.com/.test(url)) url += (url.includes("?") ? "&" : "?") + `s=${sizePx * 2}`;
+  try {
+    const r = await fetch(url, { redirect: "follow" });
+    if (!r.ok) return { html: fallback, attachment: null };
+    const ct = r.headers.get("content-type") || "image/png";
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 2_000_000) return { html: fallback, attachment: null };
+    const cid = "ghavatar";
+    const attachment = {
+      name: "avatar.png",
+      contentType: ct,
+      contentInBase64: buf.toString("base64"),
+      contentId: cid, // inline reference via src="cid:ghavatar"
+    };
+    const html = `<img src="cid:${cid}" width="${sizePx}" height="${sizePx}" alt="${esc(user.login || "")}" style="border-radius:50%;border:2px solid ${PURPLE};display:block;"/>`;
+    return { html, attachment };
+  } catch {
+    return { html: fallback, attachment: null };
   }
 }
 
@@ -96,12 +130,13 @@ export async function emailAdminNewUser(user, approveUrl, denyUrl, appUrl) {
     ["On GitHub since", String(since)],
   ].map(([k, v]) => `<tr><td style="padding:6px 0;color:#9a92b8;font-size:13px;width:130px;vertical-align:top;">${k}</td><td style="padding:6px 0;color:#ece9f6;font-size:13px;">${v}</td></tr>`).join("");
 
+  const av = await avatarBlock(user, 56);
   const card = `
    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1b1630;border:1px solid rgba(139,92,246,0.3);border-radius:12px;margin:0 0 18px;">
      <tr><td style="padding:18px;">
        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
          <td style="width:64px;vertical-align:top;">
-           <img src="${esc(user.avatar)}" width="56" height="56" alt="" style="border-radius:50%;border:2px solid ${PURPLE};display:block;"/>
+           ${av.html}
          </td>
          <td style="padding-left:14px;">
            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
@@ -117,9 +152,9 @@ export async function emailAdminNewUser(user, approveUrl, denyUrl, appUrl) {
        <td style="padding-right:10px;">${btn(approveUrl, "✓ Approve access", "primary")}</td>
        <td>${btn(denyUrl, "Deny", "secondary")}</td>
      </tr></table>` +
-    p(`<span style="font-size:12px;color:#9a92b8;">Or manage everyone in the <a href="${appUrl}/admin" style="color:${PURPLE_LT};">admin dashboard</a>. These one-click links are private to you and expire in 14 days.</span>`);
+    p(`<span style="font-size:12px;color:#9a92b8;">Each button opens a quick confirmation page — your decision only applies after you click <b>Confirm</b> there, so link scanners can't approve or deny on your behalf. Or manage everyone in the <a href="${appUrl}/admin" style="color:${PURPLE_LT};">admin dashboard</a>. These one-time links expire in 14 days.</span>`);
 
-  return send(ADMIN_EMAIL, `Hubble · @${user.login} requested access`, shell(inner, `${user.name} (@${user.login}) requested access to Hubble`));
+  return send(ADMIN_EMAIL, `Hubble · @${user.login} requested access`, shell(inner, `${user.name} (@${user.login}) requested access to Hubble`), av.attachment ? [av.attachment] : undefined);
 }
 
 // ---------- user: request received ----------
@@ -148,11 +183,31 @@ export async function emailUserDecision(user, decision, appUrl) {
   return send(user.email, "Hubble · access request update", shell(inner, "An update on your Hubble access request"));
 }
 
-// ---------- admin: a user deleted their own account ----------
-export async function emailAdminAccountDeleted(user, appUrl) {
+// ---------- admin: an account was deleted (self-service or by an admin) ----------
+export async function emailAdminAccountDeleted(user, appUrl, mode = "self", byLogin = "") {
+  const who = mode === "admin"
+    ? `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} was <strong style="color:#f0a35e;">removed from Hubble</strong>${byLogin ? ` by <strong style="color:#fff;">@${esc(byLogin)}</strong>` : ""}.`
+    : `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} just <strong style="color:#f0a35e;">deleted their account</strong> and removed their data from Hubble.`;
   const inner = h("Account deleted") +
-    p(`<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} just <strong style="color:#f0a35e;">deleted their account</strong> and removed their data from Hubble.`) +
+    p(who) +
     p(`<span style="font-size:13px;color:#9a92b8;">Email: ${user.email ? esc(user.email) : "private"} · they can sign up again any time and you'll be notified to review.</span>`) +
     `<div style="margin:6px 0 4px;">${btn(appUrl + "/admin", "Open admin dashboard", "secondary")}</div>`;
-  return send(ADMIN_EMAIL, `Hubble · @${user.login} deleted their account`, shell(inner, `@${user.login} deleted their Hubble account`));
+  return send(ADMIN_EMAIL, `Hubble · @${user.login} account deleted`, shell(inner, `@${user.login} account was deleted from Hubble`));
+}
+
+// ---------- user: confirmation that their account was deleted ----------
+export async function emailUserAccountDeleted(user, appUrl, mode = "self") {
+  if (!user.email) return false;
+  const first = user.name ? ", " + esc(user.name.split(" ")[0]) : "";
+  const inner = mode === "admin"
+    ? h("Your Hubble access was removed") +
+      p(`Hi${first}, your <strong style="color:#fff;">Hubble</strong> account and associated data have been <strong style="color:#f0a35e;">removed</strong> by an administrator.`) +
+      p("If you believe this was a mistake or you'd like access again, just reach out to the contact below — or sign up again any time.") +
+      `<div style="margin:6px 0 4px;">${btn(appUrl, "Sign up again", "secondary")}</div>`
+    : h("Your account was deleted") +
+      p(`Hi${first}, this confirms your <strong style="color:#fff;">Hubble</strong> account and associated data have been <strong style="color:#a78bfa;">deleted</strong> as you requested.`) +
+      p("Sorry to see you go! You're welcome back any time — just sign up again and an admin will re-approve you.") +
+      `<div style="margin:6px 0 4px;">${btn(appUrl, "Return to Hubble", "secondary")}</div>`;
+  const subject = mode === "admin" ? "Hubble · your access has been removed" : "Hubble · your account has been deleted";
+  return send(user.email, subject, shell(inner, "Your Hubble account has been deleted"));
 }

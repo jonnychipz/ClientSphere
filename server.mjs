@@ -15,10 +15,11 @@ import {
 } from "./auth.mjs";
 import {
   initStore, STORAGE_MODE, getUser, upsertUser, setStatus, setAdmin, deleteUser,
-  listUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken,
+  listUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken, peekToken,
 } from "./store.mjs";
 import {
-  EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision, emailAdminAccountDeleted,
+  EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision,
+  emailAdminAccountDeleted, emailUserAccountDeleted,
 } from "./email.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -149,6 +150,7 @@ const CUSTOM = (process.env.CUSTOM_AVATAR_ENABLED === "true" && (customAvatarCha
 const app = express();
 app.set("trust proxy", 1); // App Service terminates TLS at a proxy; trust X-Forwarded-Proto/Host
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false })); // for the email confirm-action POST form
 
 // ---------------- Authentication & access control ----------------
 const PUBLIC_PAGES = new Set(["/login", "/pending", "/denied"]);
@@ -291,7 +293,9 @@ app.post("/api/me/delete", requireApproved(async (req, res) => {
   await deleteUser(u.login);
   await logUsage(u.login, "account-deleted", "self");
   await log("warn", "Account self-deleted", `@${u.login} (${u.email || "no email"})`);
-  emailAdminAccountDeleted(u, appUrlOf(req)).catch((e) => console.error("delete email:", e.message));
+  // Notify the admin, and confirm to the user that their account + data were removed.
+  emailAdminAccountDeleted(u, appUrlOf(req), "self").catch((e) => console.error("admin delete email:", e.message));
+  emailUserAccountDeleted(u, appUrlOf(req), "self").catch((e) => console.error("user delete email:", e.message));
   clearSession(res, req.secure);
   res.json({ ok: true });
 }));
@@ -336,9 +340,16 @@ app.post("/api/admin/decide", requireAdmin(async (req, res) => {
 app.post("/api/admin/delete", requireAdmin(async (req, res) => {
   const { login } = req.body || {};
   if (isAdmin(login)) return res.status(400).json({ error: "Cannot delete a bootstrap admin" });
+  // Read the record BEFORE deleting so we can notify the user afterwards.
+  const target = await getUser(login);
   const ok = await deleteUser(login);
   if (!ok) return res.status(404).json({ error: "user not found" });
   await log("warn", "Account deleted by admin", `@${login} by @${req.authUser.login}`);
+  // Email both the affected user (their access was removed) and the admin mailbox (record).
+  if (target) {
+    emailUserAccountDeleted(target, appUrlOf(req), "admin").catch((e) => console.error("user delete email:", e.message));
+    emailAdminAccountDeleted(target, appUrlOf(req), "admin", req.authUser.login).catch((e) => console.error("admin delete email:", e.message));
+  }
   res.json({ ok: true });
 }));
 
@@ -351,12 +362,59 @@ app.post("/api/admin/set-admin", requireAdmin(async (req, res) => {
   res.json({ ok: true, user: { ...u, effectiveAdmin: effectiveAdmin(u) } });
 }));
 
-// One-click Approve/Deny from the admin's email — SINGLE-USE signed token.
+// ----- One-click Approve/Deny from the admin's email -----
+// IMPORTANT: email clients (Outlook Safe Links, corporate scanners, mobile
+// preloaders) issue background GET requests against every link in a message.
+// If the GET itself mutated state, BOTH the approve and deny links would fire
+// automatically with no human action. So the flow is two-step:
+//   GET  /admin/action  -> renders a confirmation page (NO state change)
+//   POST /admin/action  -> actually consumes the single-use token + applies it
+// Scanners never POST, so the decision only happens on a real button click.
+function confirmActionPage(token, decision, login) {
+  const word = decision === "approved" ? "approve" : "deny";
+  const accent = decision === "approved" ? "#a78bfa" : "#f0a35e";
+  const btnBg = decision === "approved"
+    ? "linear-gradient(135deg,#a78bfa,#6d28d9)"
+    : "linear-gradient(135deg,#f0a35e,#b4541b)";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hubble · Confirm</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 600px at 50% -10%,#241a45,#0a0813 60%);font-family:Segoe UI,Arial,sans-serif;color:#ece9f6}
+  .c{width:430px;max-width:92vw;background:linear-gradient(180deg,#16111f,#0e0a18);border:1px solid rgba(139,92,246,.38);border-radius:18px;padding:34px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 50px -14px rgba(139,92,246,.55);position:relative;overflow:hidden}
+  .c::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,#a78bfa,#8b5cf6,transparent)}
+  h1{font-family:Orbitron,Segoe UI,Arial;letter-spacing:2px;font-size:21px;margin:0 0 8px;color:${accent}}
+  p{color:#cfc8e6;font-size:14px;line-height:1.6}
+  button{cursor:pointer;border:0;margin-top:14px;background:${btnBg};color:#fff;font-weight:700;font-size:15px;padding:13px 26px;border-radius:11px;font-family:Segoe UI,Arial}
+  a{color:#a78bfa;text-decoration:none}</style></head>
+  <body><div class="c"><h1>Confirm: ${word} access</h1>
+  <p>You're about to <b>${word}</b> Hubble access for <b>@${login}</b>.</p>
+  <form method="POST" action="/admin/action">
+    <input type="hidden" name="token" value="${token}"/>
+    <input type="hidden" name="d" value="${decision}"/>
+    <button type="submit">Yes, ${word} @${login}</button>
+  </form>
+  <p style="margin-top:18px"><a href="/admin">Open the admin dashboard instead →</a></p></div></body></html>`;
+}
+
 app.get("/admin/action", async (req, res) => {
   const { token, d } = req.query;
   const decision = d === "approved" ? "approved" : d === "denied" ? "denied" : null;
   const fail = (msg) => res.status(400).send(actionPage("Link problem", msg, false));
-  if (!decision) return fail("That link is missing a valid decision.");
+  if (!decision || !token) return fail("That link is missing a valid decision.");
+  // Peek only — never mutate on GET (prevents email-scanner prefetch from acting).
+  const info = await peekToken(token);
+  if (!info || info.decision !== decision) return fail("This link is invalid. Use the admin dashboard instead.");
+  if (info.used) return fail("This link has already been used. Manage access in the admin dashboard.");
+  if (info.expired) return fail("This link has expired. Manage access in the admin dashboard.");
+  res.send(confirmActionPage(String(token), decision, info.login));
+});
+
+// The decision is applied ONLY here, on an explicit human POST (button click).
+app.post("/admin/action", async (req, res) => {
+  const token = req.body?.token || req.query?.token;
+  const d = req.body?.d || req.query?.d;
+  const decision = d === "approved" ? "approved" : d === "denied" ? "denied" : null;
+  const fail = (msg) => res.status(400).send(actionPage("Link problem", msg, false));
+  if (!decision) return fail("That request is missing a valid decision.");
   // Consume the single-use token; it must match the decision and be unused.
   const consumed = await consumeToken(token, decision);
   if (!consumed) return fail("This link is invalid, already used, or expired. Use the admin dashboard instead.");

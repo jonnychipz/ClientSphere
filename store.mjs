@@ -225,3 +225,24 @@ export async function consumeToken(id, expectedDecision) {
   t.used = true; t.usedAt = nowIso(); fileSave();
   return { login: t.login, decision: t.decision };
 }
+
+// Non-destructive read: returns the token's state WITHOUT consuming it. Used to
+// render the confirmation page on GET so that email-client link prefetch/scanners
+// (which only issue GET requests) never trigger a decision. Returns
+// { login, decision, used, expired } or null if the id is unknown.
+export async function peekToken(id) {
+  if (!id) return null;
+  let e;
+  if (STORAGE_MODE === "table") {
+    try { e = await tables.tokens.getEntity("tok", id); } catch { return null; }
+  } else {
+    e = mem.tokens[id];
+    if (!e) return null;
+  }
+  return {
+    login: e.login,
+    decision: e.decision,
+    used: !!e.used,
+    expired: Math.floor(Date.now() / 1000) > e.exp,
+  };
+}
