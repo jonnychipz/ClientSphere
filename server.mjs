@@ -657,10 +657,10 @@ function renderResponse(response, fileMap) {
 }
 
 async function runAgent(conversationId, agentName, customer) {
-  const agent = { name: agentName, type: "agent_reference" };
+  const agentReference = { name: agentName, type: "agent_reference" };
   let response = await openAI.responses.create(
     { conversation: conversationId },
-    { body: { agent } },
+    { body: { agent_reference: agentReference } },
   );
   for (let turn = 0; turn < 6; turn++) {
     const calls = (response.output || []).filter((item) => item.type === "function_call");
@@ -679,7 +679,7 @@ async function runAgent(conversationId, agentName, customer) {
     }
     response = await openAI.responses.create(
       { input: outputs, previous_response_id: response.id },
-      { body: { agent } },
+      { body: { agent_reference: agentReference } },
     );
   }
   throw new Error("Agent exceeded the live-source tool-call limit.");
