@@ -17,13 +17,13 @@
     "dev": "node --watch server.mjs"
   },
   "dependencies": {
-    "@azure/ai-agents": "^1.0.0",
-    "@azure/ai-projects": "^1.0.0",
+    "@azure/ai-projects": "^2.5.0",
     "@azure/communication-email": "^1.1.0",
     "@azure/data-tables": "^13.3.2",
-    "@azure/identity": "^4.5.0",
+    "@azure/identity": "^4.13.2",
     "@azure/storage-blob": "^12.28.0",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "openai": "^6.49.0"
   }
 }

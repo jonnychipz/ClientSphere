@@ -48,7 +48,7 @@ try {
   process.exit(1);
 }
 for (const customer of customers) {
-  if (!agentMetadata.customers[customer.id]?.agentId) {
+  if (!agentMetadata.customers[customer.id]?.agentName) {
     console.error(`Customer agent metadata is missing '${customer.id}'.`);
     process.exit(1);
   }
@@ -56,7 +56,7 @@ for (const customer of customers) {
 
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(ENDPOINT, credential);
-const agents = project.agents;
+const openAI = project.getOpenAIClient();
 
 const prettySource = (name) =>
   (name || "knowledge base")
@@ -624,20 +624,27 @@ app.get("/api/relay-token", requireApproved(async (req, res) => {
 }));
 
 // Extract assistant text + citations from the latest assistant message
-function renderAssistantMessage(msg, fileMap) {
-  let text = "";
+function renderResponse(response, fileMap) {
+  let text = response.output_text || "";
+  let collectedText = "";
   const citations = [];
   const seen = new Set();
-  for (const part of msg.content || []) {
-    if (part.type !== "text" || !part.text) continue;
-    // Collect unique sources for the citation chips
-    for (const ann of part.text.annotations || []) {
-      const fileId = ann.fileCitation?.fileId || ann.filePath?.fileId;
-      const src = prettySource(fileMap[fileId]);
-      if (!seen.has(src)) { seen.add(src); citations.push(src); }
+  for (const item of response.output || []) {
+    if (item.type !== "message") continue;
+    for (const part of item.content || []) {
+      if (part.type !== "output_text") continue;
+      collectedText += part.text || "";
+      for (const annotation of part.annotations || []) {
+        if (annotation.type !== "file_citation") continue;
+        const source = prettySource(fileMap[annotation.file_id] || annotation.filename);
+        if (!seen.has(source)) {
+          seen.add(source);
+          citations.push(source);
+        }
+      }
     }
-    text += part.text.value || "";
   }
+  if (!text) text = collectedText;
   // Strip file_search citation markers (【4:2†source】) cleanly by pattern only.
   text = text
     .replace(/\u3010[^\u3011]*\u3011/g, "") // full 【...】 tokens
@@ -649,35 +656,33 @@ function renderAssistantMessage(msg, fileMap) {
   return { text: text.trim(), citations };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Run the agent and resolve any function tool calls (live web grounding) until
-// the run reaches a terminal state.
-async function runAgent(tid, agentId, customer) {
-  let run = await agents.runs.create(tid, agentId);
-  for (let i = 0; i < 60; i++) {
-    if (["queued", "in_progress", "cancelling"].includes(run.status)) {
-      await sleep(800);
-      run = await agents.runs.get(tid, run.id);
-      continue;
-    }
-    if (run.status === "requires_action") {
-      const calls = run.requiredAction?.submitToolOutputs?.toolCalls || [];
-      const outputs = [];
-      for (const c of calls) {
-        const fn = c.function || c.functionDetails;
-        let output = `Error: unknown tool '${fn?.name}'.`;
-        if (fn?.name === FETCH_DOC_TOOL.name) {
-          output = await fetchOfficialDoc(fn.arguments, customer);
-        }
-        outputs.push({ toolCallId: c.id, output });
+async function runAgent(conversationId, agentName, customer) {
+  const agent = { name: agentName, type: "agent_reference" };
+  let response = await openAI.responses.create(
+    { conversation: conversationId },
+    { body: { agent } },
+  );
+  for (let turn = 0; turn < 6; turn++) {
+    const calls = (response.output || []).filter((item) => item.type === "function_call");
+    if (!calls.length) return response;
+    const outputs = [];
+    for (const call of calls) {
+      let output = `Error: unknown tool '${call.name}'.`;
+      if (call.name === FETCH_DOC_TOOL.name) {
+        output = await fetchOfficialDoc(call.arguments, customer);
       }
-      run = await agents.runs.submitToolOutputs(tid, run.id, outputs);
-      continue;
+      outputs.push({
+        type: "function_call_output",
+        call_id: call.call_id,
+        output,
+      });
     }
-    break; // completed / failed / expired / cancelled
+    response = await openAI.responses.create(
+      { input: outputs, previous_response_id: response.id },
+      { body: { agent } },
+    );
   }
-  return run;
+  throw new Error("Agent exceeded the live-source tool-call limit.");
 }
 
 app.post("/api/chat", requireApproved(async (req, res) => {
@@ -687,39 +692,41 @@ app.post("/api/chat", requireApproved(async (req, res) => {
   if (!customer) return res.status(400).json({ error: "valid customerId required" });
   const customerAgent = agentMetadata.customers[customer.id];
   try {
-    let tid;
+    let conversationId;
     if (threadId) {
-      tid = verifyThreadToken(
+      conversationId = verifyThreadToken(
         threadId,
         { customerId: customer.id, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       );
-      if (!tid) {
+      if (!conversationId) {
         return res.status(409).json({ error: "Conversation belongs to a different customer. Start a new conversation." });
       }
     } else {
-      tid = (await agents.threads.create()).id;
+      const conversation = await openAI.conversations.create({
+        items: [{ type: "message", role: "user", content: message }],
+      });
+      conversationId = conversation.id;
     }
-    await agents.messages.create(tid, "user", message);
-    const run = await runAgent(tid, customerAgent.agentId, customer);
-    if (run.status !== "completed") {
-      return res.status(502).json({ error: `Run ${run.status}`, detail: run.lastError?.message || run.lastError?.code });
+    if (threadId) {
+      await openAI.conversations.items.create(conversationId, {
+        items: [{ type: "message", role: "user", content: message }],
+      });
     }
-    // newest assistant message
-    const list = agents.messages.list(tid, { order: "desc", limit: 10 });
-    let reply = "", citations = [];
-    for await (const m of list) {
-      if (m.role === "assistant") {
-        ({ text: reply, citations } = renderAssistantMessage(m, customerAgent.fileMap || {}));
-        break;
-      }
+    const response = await runAgent(conversationId, customerAgent.agentName, customer);
+    if (response.status !== "completed") {
+      return res.status(502).json({
+        error: `Response ${response.status}`,
+        detail: response.error?.message || response.incomplete_details?.reason,
+      });
     }
+    const { text: reply, citations } = renderResponse(response, customerAgent.fileMap || {});
     // Capture usage (don't log raw system directives verbatim — just the kind).
     const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
     logUsage(req.authUser.login, "chat", `${customer.id}:${kind}`);
     res.json({
       threadId: createThreadToken(
-        { customerId: customer.id, threadId: tid, userLogin: req.authUser.login },
+        { customerId: customer.id, threadId: conversationId, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       ),
       customerId: customer.id,

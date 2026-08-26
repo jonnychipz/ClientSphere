@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AIProjectClient } from "@azure/ai-projects";
-import { ToolUtility } from "@azure/ai-agents";
 import { DefaultAzureCredential } from "@azure/identity";
 import { BlockBlobClient } from "@azure/storage-blob";
 import { customers } from "../customer-registry.mjs";
@@ -19,13 +18,12 @@ if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
 
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(endpoint, credential);
-const agents = project.agents;
-const existingAgents = new Map();
+const openAI = project.getOpenAIClient();
+const existingAgents = new Set();
 let previousMetadata = null;
 
-for await (const agent of agents.listAgents({ limit: 100, order: "desc" })) {
-  const customerId = agent.metadata?.clientsphereCustomerId;
-  if (customerId && !existingAgents.has(customerId)) existingAgents.set(customerId, agent);
+for await (const agent of project.agents.list({ limit: 100, order: "desc" })) {
+  existingAgents.add(agent.name);
 }
 
 if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
@@ -33,53 +31,74 @@ if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
     const blob = new BlockBlobClient(process.env.CUSTOMER_AGENT_METADATA_BLOB_URL, credential);
     previousMetadata = JSON.parse((await blob.downloadToBuffer()).toString("utf8"));
   } catch (error) {
-    if (error.statusCode !== 404) {
-      console.warn(`Could not load previous agent metadata: ${error.message}`);
+    if (error.statusCode !== 404 && error.status !== 404) {
+      console.warn(`Could not load previous agent metadata: ${error.message || error.code}`);
     }
   }
 }
 
-async function uploadProfile(customer) {
-  const filePath = path.join(knowledgeRoot, customer.id, "public-profile.md");
-  if (!fs.existsSync(filePath)) throw new Error(`Missing research profile for ${customer.name}: ${filePath}`);
-  return agents.files.uploadAndPoll(fs.createReadStream(filePath), "assistants", {
-    fileName: `${customer.id}-public-profile.md`,
-  });
+const functionTool = {
+  type: "function",
+  name: FETCH_DOC_TOOL.name,
+  description: FETCH_DOC_TOOL.description,
+  strict: true,
+  parameters: {
+    ...FETCH_DOC_TOOL.parameters,
+    additionalProperties: false,
+  },
+};
+
+async function createKnowledgeStore(storeName, files) {
+  const store = await openAI.vectorStores.create({ name: storeName });
+  const fileMap = {};
+  try {
+    for (const file of files) {
+      const uploaded = await openAI.vectorStores.files.uploadAndPoll(
+        store.id,
+        fs.createReadStream(file.path),
+      );
+      fileMap[uploaded.id] = file.label;
+    }
+  } catch (error) {
+    await openAI.vectorStores.del(store.id).catch(() => {});
+    throw error;
+  }
+  return { store, fileMap };
 }
 
-async function upsertAgent({ customerId, name, description, instructions, fileIds, previousStoreId }) {
-  const storeName = `clientsphere-${customerId}-kb`;
-  let store = await agents.vectorStores.create({
-    fileIds,
-    name: storeName,
-    metadata: { clientsphereCustomerId: customerId, clientsphereManaged: "true" },
-  });
-  for (let attempt = 0; store.status === "in_progress" && attempt < 120; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    store = await agents.vectorStores.get(store.id);
-  }
-  if (store.status !== "completed" || store.fileCounts.failed > 0) {
-    throw new Error(`Vector store '${storeName}' did not complete: ${store.status}, ${store.fileCounts.failed} failed files.`);
-  }
-  const fileSearch = ToolUtility.createFileSearchTool([store.id]);
-  const webTool = ToolUtility.createFunctionTool(FETCH_DOC_TOOL);
-  const options = {
-    name,
-    description,
+async function upsertAgent({
+  customerId,
+  name,
+  description,
+  instructions,
+  vectorStoreId,
+  previousStoreId,
+}) {
+  const definition = {
+    kind: "prompt",
+    model,
     instructions,
-    tools: [fileSearch.definition, webTool.definition],
-    toolResources: fileSearch.resources,
-    temperature: 0.25,
-    metadata: { clientsphereCustomerId: customerId, clientsphereManaged: "true" },
+    tools: [
+      { type: "file_search", vector_store_ids: [vectorStoreId] },
+      functionTool,
+    ],
   };
-  const previousAgent = existingAgents.get(customerId);
-  const agent = previousAgent
-    ? await agents.updateAgent(previousAgent.id, { model, ...options })
-    : await agents.createAgent(model, options);
-  if (previousStoreId && previousStoreId !== store.id) {
-    await agents.vectorStores.delete(previousStoreId);
+  const options = {
+    description,
+    metadata: {
+      clientsphereCustomerId: customerId,
+      clientsphereManaged: "true",
+    },
+  };
+  const agent = existingAgents.has(name)
+    ? await project.agents.update(name, definition, options)
+    : await project.agents.create(name, definition, options);
+  if (previousStoreId && previousStoreId !== vectorStoreId) {
+    await openAI.vectorStores.del(previousStoreId).catch((error) => {
+      console.warn(`Could not delete previous vector store ${previousStoreId}: ${error.message}`);
+    });
   }
-  return { agent, store };
+  return agent;
 }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(knowledgeRoot, "manifest.json"), "utf8"));
@@ -88,64 +107,74 @@ const metadata = {
   generatedAt: new Date().toISOString(),
   projectEndpoint: endpoint,
   model,
+  apiSurface: "foundry-v1",
   portfolio: null,
   customers: {},
 };
-const allFileIds = [];
 
 for (const customer of customers) {
   console.log(`Provisioning ${customer.name}...`);
-  const file = await uploadProfile(customer);
-  allFileIds.push(file.id);
-  const { agent, store } = await upsertAgent({
+  const profilePath = path.join(knowledgeRoot, customer.id, "public-profile.md");
+  if (!fs.existsSync(profilePath)) throw new Error(`Missing research profile for ${customer.name}: ${profilePath}`);
+  const { store, fileMap } = await createKnowledgeStore(
+    `clientsphere-${customer.id}-kb`,
+    [{ path: profilePath, label: `${customer.name} public profile` }],
+  );
+  const agentName = `clientsphere-${customer.id}`;
+  const agent = await upsertAgent({
     customerId: customer.id,
-    name: `ClientSphere - ${customer.name}`,
+    name: agentName,
     description: `Public-source customer intelligence and meeting coach for ${customer.name}.`,
     instructions: buildCustomerInstructions(customer, indexedAt),
-    fileIds: [file.id],
+    vectorStoreId: store.id,
     previousStoreId: previousMetadata?.customers?.[customer.id]?.vectorStoreId,
   });
   metadata.customers[customer.id] = {
-    agentId: agent.id,
+    agentName,
+    agentVersion: agent.versions.latest.version,
+    agentId: agent.versions.latest.id,
     vectorStoreId: store.id,
-    fileMap: { [file.id]: `${customer.name} public profile` },
+    fileMap,
     indexedAt,
   };
 }
 
-const catalogueFile = await agents.files.uploadAndPoll(
-  fs.createReadStream(path.join(root, "config", "customers.json")),
-  "assistants",
-  { fileName: "clientsphere-customer-catalogue.json" },
-);
-const portfolio = await upsertAgent({
+console.log("Provisioning generic portfolio guide...");
+const portfolioFiles = [
+  { path: path.join(root, "config", "customers.json"), label: "ClientSphere customer catalogue" },
+  ...customers.map((customer) => ({
+    path: path.join(knowledgeRoot, customer.id, "public-profile.md"),
+    label: `${customer.name} public profile`,
+  })),
+];
+const portfolioKnowledge = await createKnowledgeStore("clientsphere-portfolio-kb", portfolioFiles);
+const portfolioName = "clientsphere-portfolio";
+const portfolioAgent = await upsertAgent({
   customerId: "portfolio",
-  name: "ClientSphere - Portfolio Guide",
+  name: portfolioName,
   description: "Generic portfolio navigator for the ClientSphere customer catalogue.",
   instructions: `${BASE_INSTRUCTIONS}
 
 You are the generic ClientSphere portfolio guide. Help the user select the right customer specialist and compare only public facts retrieved from the attached portfolio knowledge. Always name the customer attached to each fact and never blend customer identities.`,
-  fileIds: [catalogueFile.id, ...allFileIds],
+  vectorStoreId: portfolioKnowledge.store.id,
   previousStoreId: previousMetadata?.portfolio?.vectorStoreId,
 });
 metadata.portfolio = {
-  agentId: portfolio.agent.id,
-  vectorStoreId: portfolio.store.id,
-  fileMap: { [catalogueFile.id]: "ClientSphere customer catalogue" },
+  agentName: portfolioName,
+  agentVersion: portfolioAgent.versions.latest.version,
+  agentId: portfolioAgent.versions.latest.id,
+  vectorStoreId: portfolioKnowledge.store.id,
+  fileMap: portfolioKnowledge.fileMap,
   indexedAt,
 };
 
-fs.writeFileSync(outputPath, JSON.stringify(metadata, null, 2));
+const payload = Buffer.from(JSON.stringify(metadata, null, 2));
+fs.writeFileSync(outputPath, payload);
 if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
-  const payload = Buffer.from(JSON.stringify(metadata, null, 2));
-  const blob = new BlockBlobClient(
-    process.env.CUSTOMER_AGENT_METADATA_BLOB_URL,
-    credential,
-  );
+  const blob = new BlockBlobClient(process.env.CUSTOMER_AGENT_METADATA_BLOB_URL, credential);
   await blob.uploadData(payload, {
     blobHTTPHeaders: { blobContentType: "application/json; charset=utf-8" },
   });
   console.log(`Metadata uploaded to ${process.env.CUSTOMER_AGENT_METADATA_BLOB_URL}.`);
 }
 console.log(`Provisioned ${customers.length} customer agents plus the portfolio guide.`);
-console.log(`Metadata written to ${outputPath}.`);

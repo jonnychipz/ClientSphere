@@ -26,6 +26,7 @@ export const FETCH_DOC_TOOL = {
       },
     },
     required: ["url"],
+    additionalProperties: false,
   },
 };
 

@@ -6,7 +6,7 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 
 - Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
 - One deterministic Foundry agent and vector store per customer, plus a generic portfolio guide.
-- Customer-owned conversation tokens that prevent threads being reused across customer agents.
+- Customer-owned conversation tokens that prevent conversations being reused across customer agents.
 - Public-source research over official customer websites, refreshed weekly with retrieval notes and timestamps.
 - Guarded live web grounding restricted to the active customer's official domain and approved public registries.
 - Evidence-led executive brief, roleplay and scorecard, session recap, citations, and public links.
