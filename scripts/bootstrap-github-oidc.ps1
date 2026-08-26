@@ -110,7 +110,7 @@ gh variable set AZURE_CLIENT_OBJECT_ID --repo $Repository --body $identity.princ
 gh variable set AZURE_TENANT_ID --repo $Repository --body $TenantId
 gh variable set AZURE_SUBSCRIPTION_ID --repo $Repository --body $SubscriptionId
 gh variable set AZURE_RESOURCE_GROUP --repo $Repository --body "rg-clientsphere-95bc"
-gh variable set AZURE_WEBAPP_NAME --repo $Repository --body "clientsphere-95bc"
+gh variable set AZURE_CONTAINER_APP_NAME --repo $Repository --body "clientsphere-95bc"
 
 $sessionSecretExists = gh secret list --repo $Repository --json name --jq "any(.name == ""SESSION_SECRET"")"
 if ($sessionSecretExists -ne "true") {

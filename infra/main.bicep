@@ -22,8 +22,9 @@ param modelName string = 'gpt-5.4'
 @description('Model version verified against the source Hubble deployment.')
 param modelVersion string = '2026-03-05'
 
-var webAppName = 'clientsphere-${suffix}'
-var planName = 'asp-clientsphere-${suffix}'
+var containerAppName = 'clientsphere-${suffix}'
+var containerEnvironmentName = 'cae-clientsphere-${suffix}'
+var containerRegistryName = 'acrclientsphere${suffix}'
 var aiAccountName = 'clientsphere-ai-${suffix}'
 var aiProjectName = 'clientsphere-project'
 var storageName = 'stclientsphere${suffix}'
@@ -38,7 +39,8 @@ var azureAiDeveloperRole = subscriptionResourceId('Microsoft.Authorization/roleD
 var storageTableContributorRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
 var storageBlobContributorRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
 var storageBlobReaderRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')
-var keyVaultSecretsUserRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+var acrPullRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+var acrPushRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logName
@@ -171,145 +173,182 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-0
   }
 }
 
-resource appPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
-  name: planName
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: containerRegistryName
   location: location
-  kind: 'linux'
   sku: {
-    name: 'B1'
-    tier: 'Basic'
-    capacity: 1
+    name: 'Basic'
   }
   properties: {
-    reserved: true
+    adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
   }
 }
 
-resource webApp 'Microsoft.Web/sites@2024-04-01' = {
-  name: webAppName
+resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: containerEnvironmentName
   location: location
-  kind: 'app,linux'
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+    zoneRedundant: false
+  }
+}
+
+resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: containerAppName
+  location: location
   identity: {
     type: 'SystemAssigned'
   }
   properties: {
-    clientAffinityEnabled: false
-    httpsOnly: true
-    publicNetworkAccess: 'Enabled'
-    serverFarmId: appPlan.id
-    siteConfig: {
-      alwaysOn: true
-      ftpsState: 'Disabled'
-      http20Enabled: true
-      linuxFxVersion: 'NODE|22-lts'
-      minTlsVersion: '1.2'
-      scmMinTlsVersion: '1.2'
-      use32BitWorkerProcess: false
-      appSettings: [
+    managedEnvironmentId: containerEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        allowInsecure: false
+        external: true
+        targetPort: 3000
+        transport: 'auto'
+      }
+      secrets: [
         {
-          name: 'NODE_ENV'
-          value: 'production'
-        }
-        {
-          name: 'PROJECT_ENDPOINT'
-          value: 'https://${foundry.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
-        }
-        {
-          name: 'MODEL_DEPLOYMENT'
-          value: modelDeployment.name
-        }
-        {
-          name: 'SPEECH_REGION'
-          value: aiLocation
-        }
-        {
-          name: 'SPEECH_STS_ENDPOINT'
-          value: 'https://${foundry.name}.cognitiveservices.azure.com/sts/v1.0/issueToken'
-        }
-        {
-          name: 'AZURE_STORAGE_ACCOUNT'
-          value: storage.name
-        }
-        {
-          name: 'CUSTOMER_AGENT_METADATA_BLOB_URL'
-          value: 'https://${storage.name}.blob.${environment().suffixes.storage}/config/customer-agents.json'
-        }
-        {
-          name: 'SESSION_SECRET'
-          value: '@Microsoft.KeyVault(SecretUri=${sessionSecretResource.properties.secretUriWithVersion})'
-        }
-        {
-          name: 'AUTH_DEV_MODE'
-          value: 'false'
-        }
-        {
-          name: 'ADMIN_LOGINS'
-          value: 'jonnychipz'
-        }
-        {
-          name: 'PUBLIC_BASE_URL'
-          value: 'https://${webAppName}.azurewebsites.net'
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsights.properties.ConnectionString
-        }
-        {
-          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'false'
+          name: 'session-secret'
+          value: sessionSecret
         }
       ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'clientsphere'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          env: [
+            {
+              name: 'NODE_ENV'
+              value: 'production'
+            }
+            {
+              name: 'PORT'
+              value: '3000'
+            }
+            {
+              name: 'PROJECT_ENDPOINT'
+              value: 'https://${foundry.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'MODEL_DEPLOYMENT'
+              value: modelDeployment.name
+            }
+            {
+              name: 'SPEECH_REGION'
+              value: aiLocation
+            }
+            {
+              name: 'SPEECH_STS_ENDPOINT'
+              value: 'https://${foundry.name}.cognitiveservices.azure.com/sts/v1.0/issueToken'
+            }
+            {
+              name: 'AZURE_STORAGE_ACCOUNT'
+              value: storage.name
+            }
+            {
+              name: 'CUSTOMER_AGENT_METADATA_BLOB_URL'
+              value: 'https://${storage.name}.blob.${environment().suffixes.storage}/config/customer-agents.json'
+            }
+            {
+              name: 'SESSION_SECRET'
+              secretRef: 'session-secret'
+            }
+            {
+              name: 'AUTH_DEV_MODE'
+              value: 'false'
+            }
+            {
+              name: 'ADMIN_LOGINS'
+              value: 'jonnychipz'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsights.properties.ConnectionString
+            }
+          ]
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+        rules: [
+          {
+            name: 'http'
+            http: {
+              metadata: {
+                concurrentRequests: '50'
+              }
+            }
+          }
+        ]
+      }
     }
   }
 }
 
 resource appAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry.id, webApp.id, cognitiveServicesUserRole)
+  name: guid(foundry.id, containerApp.id, cognitiveServicesUserRole)
   scope: foundry
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: cognitiveServicesUserRole
   }
 }
 
 resource appOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry.id, webApp.id, cognitiveOpenAiUserRole)
+  name: guid(foundry.id, containerApp.id, cognitiveOpenAiUserRole)
   scope: foundry
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: cognitiveOpenAiUserRole
   }
 }
 
 resource appTableContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, webApp.id, storageTableContributorRole)
+  name: guid(storage.id, containerApp.id, storageTableContributorRole)
   scope: storage
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: storageTableContributorRole
   }
 }
 
 resource appBlobReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, webApp.id, storageBlobReaderRole)
+  name: guid(storage.id, containerApp.id, storageBlobReaderRole)
   scope: storage
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: storageBlobReaderRole
   }
 }
 
-resource appVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, webApp.id, keyVaultSecretsUserRole)
-  scope: keyVault
+resource appAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, containerApp.id, acrPullRole)
+  scope: containerRegistry
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: keyVaultSecretsUserRole
+    roleDefinitionId: acrPullRole
   }
 }
 
@@ -343,8 +382,20 @@ resource deploymentBlobContributor 'Microsoft.Authorization/roleAssignments@2022
   }
 }
 
-output webAppName string = webApp.name
-output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
+resource deploymentAcrPush 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, deploymentPrincipalObjectId, acrPushRole)
+  scope: containerRegistry
+  properties: {
+    principalId: deploymentPrincipalObjectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPushRole
+  }
+}
+
+output containerAppName string = containerApp.name
+output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
+output containerRegistryName string = containerRegistry.name
+output containerRegistryServer string = containerRegistry.properties.loginServer
 output projectEndpoint string = 'https://${foundry.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
 output storageAccountName string = storage.name
 output metadataBlobUrl string = 'https://${storage.name}.blob.${environment().suffixes.storage}/config/customer-agents.json'

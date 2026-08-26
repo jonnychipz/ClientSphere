@@ -46,7 +46,7 @@ jobs:
       id-token: write
     environment:
       name: production
-      url: ${{ steps.outputs.outputs.webapp_url }}
+      url: ${{ steps.outputs.outputs.app_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +68,11 @@ jobs:
       - name: Provision Azure infrastructure
         shell: bash
         run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          for provider in Microsoft.App Microsoft.ContainerRegistry Microsoft.CognitiveServices Microsoft.Insights Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Storage; do
+            az provider register --namespace "$provider" --wait
+          done
+
           az group create \
             --name "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --location uksouth \
@@ -90,8 +95,10 @@ jobs:
           echo "PROJECT_ENDPOINT=$(jq -r '.properties.outputs.projectEndpoint.value' deployment.json)" >> "$GITHUB_ENV"
           echo "CUSTOMER_AGENT_METADATA_BLOB_URL=$(jq -r '.properties.outputs.metadataBlobUrl.value' deployment.json)" >> "$GITHUB_ENV"
           echo "STORAGE_ACCOUNT=$(jq -r '.properties.outputs.storageAccountName.value' deployment.json)" >> "$GITHUB_ENV"
-          echo "WEBAPP_NAME=$(jq -r '.properties.outputs.webAppName.value' deployment.json)" >> "$GITHUB_ENV"
-          echo "webapp_url=$(jq -r '.properties.outputs.webAppUrl.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          echo "CONTAINER_APP_NAME=$(jq -r '.properties.outputs.containerAppName.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "REGISTRY_NAME=$(jq -r '.properties.outputs.containerRegistryName.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "REGISTRY_SERVER=$(jq -r '.properties.outputs.containerRegistryServer.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "app_url=$(jq -r '.properties.outputs.containerAppUrl.value' deployment.json)" >> "$GITHUB_OUTPUT"
 
       - run: npm ci
 
@@ -143,31 +150,47 @@ jobs:
             sleep 30
           done
 
-      - name: Package application
+      - name: Build application container
         shell: bash
         run: |
-          zip -r release.zip . \
-            -x ".git/*" \
-            -x ".github/*" \
-            -x ".azure/*" \
-            -x "infra/*" \
-            -x "scripts/*" \
-            -x "test/*" \
-            -x "knowledge/*" \
-            -x "data/*" \
-            -x "*.png" \
-            -x "*.bak"
+          for attempt in 1 2 3 4 5; do
+            if az acr build \
+              --registry "$REGISTRY_NAME" \
+              --image "clientsphere:${{ github.sha }}" \
+              --file Dockerfile .; then
+              exit 0
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              exit 1
+            fi
+            echo "ACR role propagation pending; retrying in 30 seconds..."
+            sleep 30
+          done
 
       - name: Deploy application
+        shell: bash
         run: |
-          az webapp deploy \
+          az containerapp registry set \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$WEBAPP_NAME" \
-            --src-path release.zip \
-            --type zip \
-            --clean true \
-            --restart true \
+            --name "$CONTAINER_APP_NAME" \
+            --server "$REGISTRY_SERVER" \
+            --identity system \
             --output none
+
+          for attempt in 1 2 3 4 5; do
+            if az containerapp update \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$CONTAINER_APP_NAME" \
+              --image "$REGISTRY_SERVER/clientsphere:${{ github.sha }}" \
+              --output none; then
+              exit 0
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              exit 1
+            fi
+            echo "Container registry pull role pending; retrying in 30 seconds..."
+            sleep 30
+          done
 
       - name: Configure GitHub OAuth
         if: env.GH_OAUTH_CLIENT_ID != '' && env.GH_OAUTH_CLIENT_SECRET != ''
@@ -175,20 +198,25 @@ jobs:
           GH_OAUTH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
           GH_OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
         run: |
-          az webapp config appsettings set \
+          az containerapp secret set \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$WEBAPP_NAME" \
-            --settings \
+            --name "$CONTAINER_APP_NAME" \
+            --secrets github-client-secret="$GH_OAUTH_CLIENT_SECRET" \
+            --output none
+          az containerapp update \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars \
               GITHUB_CLIENT_ID="$GH_OAUTH_CLIENT_ID" \
-              GITHUB_CLIENT_SECRET="$GH_OAUTH_CLIENT_SECRET" \
+              GITHUB_CLIENT_SECRET=secretref:github-client-secret \
               AUTH_DEV_MODE=false \
             --output none
 
       - name: Smoke test
         shell: bash
         run: |
-          url="${{ steps.outputs.outputs.webapp_url }}/healthz"
-          for attempt in {1..20}; do
+          url="${{ steps.outputs.outputs.app_url }}/healthz"
+          for attempt in {1..30}; do
             if curl --fail --silent --show-error "$url" | jq -e '.status == "ok" and .customers == 42' >/dev/null; then
               exit 0
             fi

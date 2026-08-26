@@ -43,9 +43,16 @@ jobs:
             --query properties.outputs -o json)
           echo "PROJECT_ENDPOINT=$(jq -r '.projectEndpoint.value' <<< "$outputs")" >> "$GITHUB_ENV"
           echo "CUSTOMER_AGENT_METADATA_BLOB_URL=$(jq -r '.metadataBlobUrl.value' <<< "$outputs")" >> "$GITHUB_ENV"
+          echo "CONTAINER_APP_NAME=$(jq -r '.containerAppName.value' <<< "$outputs")" >> "$GITHUB_ENV"
 
       - run: npm run customers:refresh
       - run: npm run agents:provision
 
       - name: Restart application to load refreshed metadata
-        run: az webapp restart --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "${{ vars.AZURE_WEBAPP_NAME }}"
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars CLIENTSPHERE_METADATA_VERSION="$(date -u +%Y%m%dT%H%M%SZ)" \
+            --output none

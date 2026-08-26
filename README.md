@@ -31,7 +31,7 @@ Browser
   |-- avatar + speech --------> keyless Azure Speech token and relay endpoints
   `-- GitHub OAuth -----------> approval and admin workflow
 
-Azure App Service managed identity
+Azure Container Apps managed identity
   |-- Azure AI Foundry / GPT-5.4
   |-- Azure Speech avatar and STT
   |-- Blob metadata for customer agent IDs

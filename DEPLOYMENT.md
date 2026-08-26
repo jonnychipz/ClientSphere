@@ -22,14 +22,15 @@ The `infra/main.bicep` deployment creates:
 | Azure AI Services / Foundry | `clientsphere-ai-95bc` |
 | Foundry project | `clientsphere-project` |
 | GPT deployment | `gpt-5.4` |
-| App Service | `clientsphere-95bc` |
-| Linux App Service plan | `asp-clientsphere-95bc` |
+| Container App | `clientsphere-95bc` |
+| Container Apps environment | `cae-clientsphere-95bc` |
+| Azure Container Registry | `acrclientsphere95bc` |
 | Storage | `stclientsphere95bc` |
 | Key Vault | `kv-clientsphere-95bc` |
 | Application Insights | `appi-clientsphere-95bc` |
 | Log Analytics | `log-clientsphere-95bc` |
 
-The web app uses managed identity for Foundry, Speech, Blob, Table Storage, and Key Vault.
+The Container App uses managed identity for Foundry, Speech, Blob, Table Storage, and private image pulls.
 
 ## Deployment workflow
 
@@ -41,7 +42,7 @@ Every push to `main`:
 4. Creates or updates the Azure resources.
 5. Refreshes public customer research and Foundry agents when their definitions changed or metadata is absent.
 6. Uploads customer-agent metadata to private Blob Storage.
-7. Deploys the Node application to App Service.
+7. Builds the image in Azure Container Registry and deploys it to Azure Container Apps Consumption.
 8. Verifies `/healthz` reports all 42 customer agents.
 
 The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, uploads metadata, and restarts the app.
@@ -54,4 +55,4 @@ GitHub does not expose an API for creating OAuth Apps. Complete the one manual r
 .\scripts\configure-github-oauth.ps1 -ClientId "<id>" -ClientSecret "<secret>"
 ```
 
-The script stores the credentials as repository secrets and triggers the deployment workflow. The workflow applies them to App Service. Until that is complete, production shows a setup-pending sign-in page; simulated login is never exposed.
+The script stores the credentials as repository secrets and triggers the deployment workflow. The workflow applies them as Container App secrets. Until that is complete, production shows a setup-pending sign-in page; simulated login is never exposed.

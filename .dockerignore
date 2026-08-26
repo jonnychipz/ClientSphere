@@ -1,0 +1,13 @@
+.git
+.github
+.azure
+data
+infra
+knowledge
+node_modules
+scripts
+test
+*.log
+*.png
+*.bak
+customer-agents.json
