@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY --chown=node:node . .
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 USER node
 EXPOSE 3000
