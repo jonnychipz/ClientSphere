@@ -656,10 +656,12 @@ function renderResponse(response, fileMap) {
   return { text: text.trim(), citations };
 }
 
-async function runAgent(conversationId, agentName, customer) {
+async function runAgent(previousResponseId, agentName, customer, message) {
   const agentReference = { name: agentName, type: "agent_reference" };
+  const request = { input: message };
+  if (previousResponseId) request.previous_response_id = previousResponseId;
   let response = await openAI.responses.create(
-    { conversation: conversationId },
+    request,
     { body: { agent_reference: agentReference } },
   );
   for (let turn = 0; turn < 6; turn++) {
@@ -692,28 +694,18 @@ app.post("/api/chat", requireApproved(async (req, res) => {
   if (!customer) return res.status(400).json({ error: "valid customerId required" });
   const customerAgent = agentMetadata.customers[customer.id];
   try {
-    let conversationId;
+    let previousResponseId = null;
     if (threadId) {
-      conversationId = verifyThreadToken(
+      previousResponseId = verifyThreadToken(
         threadId,
         { customerId: customer.id, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       );
-      if (!conversationId) {
+      if (!previousResponseId) {
         return res.status(409).json({ error: "Conversation belongs to a different customer. Start a new conversation." });
       }
-    } else {
-      const conversation = await openAI.conversations.create({
-        items: [{ type: "message", role: "user", content: message }],
-      });
-      conversationId = conversation.id;
     }
-    if (threadId) {
-      await openAI.conversations.items.create(conversationId, {
-        items: [{ type: "message", role: "user", content: message }],
-      });
-    }
-    const response = await runAgent(conversationId, customerAgent.agentName, customer);
+    const response = await runAgent(previousResponseId, customerAgent.agentName, customer, message);
     if (response.status !== "completed") {
       return res.status(502).json({
         error: `Response ${response.status}`,
@@ -726,7 +718,7 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     logUsage(req.authUser.login, "chat", `${customer.id}:${kind}`);
     res.json({
       threadId: createThreadToken(
-        { customerId: customer.id, threadId: conversationId, userLogin: req.authUser.login },
+        { customerId: customer.id, threadId: response.id, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       ),
       customerId: customer.id,
