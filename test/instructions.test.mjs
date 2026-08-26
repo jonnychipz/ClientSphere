@@ -22,6 +22,10 @@ test("synthetic use-case prompt is detailed internally and concise conversationa
   assert.match(prompt, /synthetic use-case demonstration/i);
   assert.match(prompt, /Operating workflow/);
   assert.match(prompt, /Multimodal behaviour/);
+  assert.match(prompt, /Guided three-scene demo/);
+  assert.match(prompt, /Code Interpreter/);
+  assert.match(prompt, /RESPONSE_MODE:BRIEF/);
+  assert.match(prompt, /RESPONSE_MODE:STRUCTURED/);
   assert.match(prompt, /normally no more than 70 words/);
   for (const step of useCase.workflow) assert.match(prompt, new RegExp(step.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

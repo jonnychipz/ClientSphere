@@ -7,6 +7,8 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 - Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
 - Four deterministic Foundry modes per customer: one concise general adviser plus three industry-tailored synthetic use-case agents, all sharing that customer's isolated vector store.
 - 126 synthetic demo agents covering image-first, operational reasoning, and business-value scenario workflows.
+- Three click-through scenes per synthetic agent: Live signal, Agent at work, and Value realised, each carrying realistic customer-labelled synthetic records.
+- Brief + Voice mode for fast avatar conversation and Structured mode for screen-shared workflow, evidence, controls, KPI, and proof-of-value artefacts.
 - GPT-5.6 Sol, Luna, and Terra model deployments with bounded PNG/JPEG/WebP input for multimodal demonstrations.
 - Customer-owned conversation tokens that prevent conversations being reused across customer agents.
 - Public-source research over official customer websites, refreshed weekly with retrieval notes and timestamps.

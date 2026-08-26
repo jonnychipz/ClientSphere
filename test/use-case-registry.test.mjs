@@ -13,6 +13,12 @@ test("every customer receives three distinct latest-model use cases", () => {
       assert.match(useCase.modelDeployment, /^gpt-5\.6-(sol|luna|terra)$/);
       assert.equal(useCase.workflow.length, 6);
       assert.equal(useCase.prompts.length, 3);
+      assert.equal(useCase.demoScenes.length, 3);
+      assert.deepEqual(useCase.demoScenes.map((scene) => scene.id), ["live-signal", "agent-work", "business-value"]);
+      for (const scene of useCase.demoScenes) {
+        assert.match(scene.prompt, new RegExp(customer.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.ok(Object.keys(scene.syntheticData).length >= 4);
+      }
     }
   }
 });

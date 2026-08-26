@@ -708,8 +708,9 @@ async function runAgent(previousResponseId, agentName, customer, input) {
 }
 
 app.post("/api/chat", requireApproved(async (req, res) => {
-  const { message, threadId, customerId, agentMode = "general", attachments } = req.body || {};
+  const { message, threadId, customerId, agentMode = "general", responseMode = "brief", attachments } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
+  if (!["brief", "structured"].includes(responseMode)) return res.status(400).json({ error: "valid responseMode required" });
   const customer = getCustomer(customerId);
   if (!customer) return res.status(400).json({ error: "valid customerId required" });
   const customerMetadata = agentMetadata.customers[customer.id];
@@ -720,7 +721,8 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     : customerMetadata.useCases?.[agentMode];
   if (!customerAgent?.agentName) return res.status(503).json({ error: "Selected agent is not provisioned yet." });
   try {
-    const input = buildAgentInput(message.trim(), attachments);
+    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]\n${message.trim()}`;
+    const input = buildAgentInput(controlledMessage, attachments);
     let previousResponseId = null;
     if (threadId) {
       previousResponseId = verifyThreadToken(
@@ -750,6 +752,7 @@ app.post("/api/chat", requireApproved(async (req, res) => {
       ),
       customerId: customer.id,
       agentMode,
+      responseMode,
       reply,
       citations,
     });

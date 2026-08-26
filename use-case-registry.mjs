@@ -367,6 +367,70 @@ const CLUSTER_RULES = [
   { pattern: /(industrial|manufactur|steel|cable|construction|materials|machinery|machine tool|safety|automotive|infrastructure|power electronics|textile|tools|vehicle)/i, useCases: INDUSTRIAL },
 ];
 
+const SYNTHETIC_DATA = {
+  "visual-safety": { site: "Plant 04 / loading zone", asset: "Barrier line B-17", observation: "Visible anchor displacement after vehicle contact", openActions: 3, productionRiskHours: 6 },
+  "asset-service": { asset: "Critical unit AX-204", healthScore: 61, alerts: 4, slaHours: 4, estimatedDowntimeHours: 9 },
+  "supply-chain": { supplier: "Synthetic Supplier North", leadTimeDays: 41, inventoryCoverDays: 19, demandVariancePercent: 18, delayDays: 21 },
+  "mission-readiness": { mission: "Exercise Horizon", availableAssets: 7, requiredAssets: 8, crewCoveragePercent: 92, unresolvedConstraints: 3 },
+  "maintenance-evidence": { component: "Synthetic actuator AC-77", cycles: 4180, warrantyDaysRemaining: 94, evidenceItems: 6, anomalyConfidencePercent: 78 },
+  "contract-risk": { programme: "Programme Orion", milestoneDaysAtRisk: 24, supplierDependencies: 7, openRisks: 11, contractValueBand: "£25m-£50m" },
+  "care-operations": { service: "Synthetic outpatient pathway", dailyDemand: 146, availableSlots: 128, handoffDelayMinutes: 47, highPriorityCases: 9 },
+  "quality-evidence": { batch: "SYN-QA-2408", evidenceItems: 12, missingRecords: 2, reviewSlaHours: 8, sampleDeviationPercent: 3.4 },
+  "regulatory-growth": { market: "Synthetic Market A", evidenceGaps: 4, pathwayMonths: 14, investmentBand: "£3m-£5m", forecastPatients: 6200 },
+  "field-integrity": { asset: "Synthetic line section P-18", inspectionAgeDays: 287, anomalySignals: 3, riskScore: 72, followupHours: 12 },
+  "network-operations": { networkZone: "Zone West-3", utilisationPercent: 91, plannedOutages: 2, activeConstraints: 4, demandUpliftPercent: 12 },
+  "transition-investment": { initiative: "Synthetic low-carbon hub", capexBand: "£20m-£30m", emissionsReductionPercent: 18, paybackYears: 5.2, deliveryRisks: 6 },
+  "evidence-review": { caseId: "SYN-EV-1042", documents: 18, imageEvidence: 5, inconsistencies: 3, materialExceptions: 1 },
+  "audit-orchestration": { audit: "Synthetic multi-site audit", sites: 8, controls: 42, highRiskControls: 7, assessorDays: 18 },
+  "trust-growth": { buyer: "Synthetic enterprise risk committee", evidenceAssets: 9, openObjections: 4, decisionDays: 45, opportunityBand: "£1m-£3m" },
+  "product-concierge": { shopper: "Synthetic returning customer", occasion: "Premium gift", budget: "£45-£70", preferenceSignals: 5, candidateProducts: 12 },
+  "demand-growth": { category: "Synthetic hero range", stores: 64, demandUpliftPercent: 22, stockCoverDays: 16, markdownRiskPercent: 11 },
+  "brand-studio": { launch: "Synthetic seasonal collection", audiences: 3, markets: 4, campaignBudgetBand: "£500k-£750k", targetConversionPercent: 4.8 },
+  "field-vision": { visit: "SYN-FS-8821", location: "Customer site 14", visibleSignals: 4, firstTimeFixTargetPercent: 86, slaHours: 6 },
+  "workforce-routing": { jobs: 38, technicians: 12, skillGroups: 5, travelHours: 29, slaBreachesAtRisk: 7 },
+  "customer-retention": { segment: "Synthetic strategic accounts", accounts: 48, renewalValueBand: "£4m-£6m", riskSignals: 13, nextBestActions: 9 },
+  "participant-concierge": { participant: "Synthetic international visitor", event: "Championship week", serviceRequests: 3, languages: 2, accessibilityNeeds: 1 },
+  "event-operations": { event: "Synthetic global championship", venues: 5, attendees: 18000, readinessIssues: 8, criticalIncidents: 1 },
+  "integrity-growth": { initiative: "Synthetic participation programme", regions: 6, targetParticipants: 25000, integrityControls: 12, fundingBand: "£2m-£4m" },
+  "experience-copilot": { journey: "Synthetic customer onboarding", steps: 9, frictionPoints: 4, completionRatePercent: 63, targetRatePercent: 82 },
+  "operations-agent": { process: "Synthetic service operation", cases: 240, exceptions: 28, manualHoursWeekly: 74, targetCycleReductionPercent: 35 },
+  "strategy-agent": { decision: "Synthetic AI transformation portfolio", initiatives: 7, investmentBand: "£5m-£8m", targetValueBand: "£12m-£18m", risks: 9 },
+};
+
+function formatSyntheticData(data) {
+  return Object.entries(data)
+    .map(([key, value]) => `${key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}: ${value}`)
+    .join("; ");
+}
+
+function buildDemoScenes(template, customer) {
+  const data = { customer: customer.name, ...(SYNTHETIC_DATA[template.id] || {}) };
+  const dataLine = formatSyntheticData(data);
+  return [
+    {
+      id: "live-signal",
+      label: "1. Live signal",
+      title: "Open the synthetic case",
+      prompt: `Start a live ${template.name} demo for ${customer.name}. Act as if this synthetic case has just arrived. Synthetic data: ${dataLine}. Give a brief in-role opening, show the signal, and ask me to click or say "analyse".`,
+      syntheticData: data,
+    },
+    {
+      id: "agent-work",
+      label: "2. Agent at work",
+      title: "Run the agent workflow",
+      prompt: `Continue the ${template.name} demo for ${customer.name} using this synthetic data: ${dataLine}. Run the complete six-step workflow, show meaningful intermediate decisions, use Code Interpreter for any useful calculations, and pause at the human approval point.`,
+      syntheticData: data,
+    },
+    {
+      id: "business-value",
+      label: "3. Value realised",
+      title: "Land business value",
+      prompt: `Close the ${template.name} demo for ${customer.name}. Using the synthetic case (${dataLine}), provide a structured before/after value view, directional KPI impact, risks, human controls, a 30-day proof-of-value plan, and the next executive question.`,
+      syntheticData: data,
+    },
+  ];
+}
+
 function enrichUseCase(template, customer) {
   return {
     ...template,
@@ -376,6 +440,7 @@ function enrichUseCase(template, customer) {
     customerName: customer.name,
     sector: customer.sector,
     summary: `${template.summary} Tailored to ${customer.name}'s ${customer.sector.toLowerCase()} context.`,
+    demoScenes: buildDemoScenes(template, customer),
   };
 }
 

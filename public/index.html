@@ -125,7 +125,13 @@
             <strong id="agentSwitcherTitle">Agent mode</strong>
             <span>General adviser + 3 synthetic demos</span>
           </div>
-          <span class="agent-mode-badge" id="agentModeBadge">General</span>
+          <div class="response-mode-control">
+            <span class="agent-mode-badge" id="agentModeBadge">General</span>
+            <div class="seg response-mode-seg" id="responseModeSeg" aria-label="Response detail">
+              <button type="button" data-response-mode="brief" class="active">Brief + voice</button>
+              <button type="button" data-response-mode="structured">Structured</button>
+            </div>
+          </div>
         </div>
         <div class="agent-mode-grid" id="agentModeGrid" role="tablist" aria-label="Customer agents"></div>
         <div class="agent-mode-detail" id="agentModeDetail"></div>

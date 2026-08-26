@@ -601,6 +601,10 @@ select {
 .agent-switcher-head > div { display: flex; flex-direction: column; gap: 1px; }
 .agent-switcher-head strong { font-size: 13px; }
 .agent-switcher-head span { color: var(--muted); font-size: 11px; }
+.response-mode-control { display: flex; align-items: center; gap: 7px; }
+.response-mode-seg { display: inline-flex; padding: 2px; }
+.response-mode-seg button { padding: 5px 8px; border: 0; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+.response-mode-seg button.active { color: #fff; background: var(--accent); }
 .agent-mode-badge {
   padding: 4px 8px;
   color: var(--text) !important;
@@ -678,6 +682,11 @@ select {
 .agent-workflow { flex: 0 0 170px; color: var(--muted); font-size: 10.5px; }
 .agent-workflow summary { color: var(--text); cursor: pointer; font-weight: 600; }
 .agent-workflow ol { margin: 7px 0 0; padding-left: 18px; line-height: 1.45; }
+.agent-workflow details + details { margin-top: 8px; }
+.agent-workflow dl { margin: 7px 0 0; }
+.agent-workflow dl div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.agent-workflow dt { text-transform: capitalize; }
+.agent-workflow dd { margin: 0; color: var(--text); text-align: right; }
 .messages { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }
@@ -984,6 +993,8 @@ select { color: var(--text); }
   .agent-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-mode-detail { flex-direction: column; }
   .agent-workflow { flex-basis: auto; width: 100%; }
+  .agent-switcher-head { align-items: flex-start; }
+  .response-mode-control { align-items: flex-end; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

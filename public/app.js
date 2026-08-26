@@ -89,6 +89,7 @@ const els = {
   agentModeGrid: document.getElementById("agentModeGrid"),
   agentModeDetail: document.getElementById("agentModeDetail"),
   agentModeBadge: document.getElementById("agentModeBadge"),
+  responseModeSeg: document.getElementById("responseModeSeg"),
   attachBtn: document.getElementById("attachBtn"),
   imageInput: document.getElementById("imageInput"),
   attachmentPreview: document.getElementById("attachmentPreview"),
@@ -106,6 +107,7 @@ const state = {
   customer: null,
   resources: [],
   agentMode: "general",
+  responseMode: "brief",
   attachment: null,
   attachmentGeneration: 0,
   fileReader: null,
@@ -258,6 +260,7 @@ async function runChat(prompt, opts = {}) {
         threadId: state.threadId,
         customerId: state.customer?.id,
         agentMode: state.agentMode,
+        responseMode: state.responseMode,
         attachments: opts.attachment ? [opts.attachment] : [],
       }),
     });
@@ -277,7 +280,7 @@ async function runChat(prompt, opts = {}) {
       opts.onReply(data);
     } else {
       addMessage("bot", data.reply, data.citations);
-      if (state.voiceOn && state.avatarLive && opts.speak !== false) speak(data.reply);
+      if (data.responseMode === "brief" && state.voiceOn && state.avatarLive && opts.speak !== false) speak(data.reply);
     }
   } catch (err) {
     if (typing) typing.remove();
@@ -775,6 +778,18 @@ function currentModeDefinition() {
   return agentModes().find((mode) => mode.id === state.agentMode) || generalModeDefinition();
 }
 
+function selectResponseMode(mode) {
+  if (!["brief", "structured"].includes(mode)) return;
+  state.responseMode = mode;
+  [...els.responseModeSeg.querySelectorAll("[data-response-mode]")].forEach((button) => {
+    button.classList.toggle("active", button.dataset.responseMode === mode);
+  });
+  try { localStorage.setItem("clientsphere.responseMode", mode); } catch {}
+  toast(mode === "brief"
+    ? "Brief + voice mode: concise conversational answers."
+    : "Structured mode: detailed screen-first answers.");
+}
+
 function renderAgentModes() {
   const modes = agentModes();
   const active = currentModeDefinition();
@@ -800,13 +815,23 @@ function renderAgentModes() {
     active.modelLabel || "GPT-5.6",
     active.supportsImages ? "Multimodal" : "Text + web",
     "Public web grounded",
+    ...(active.id === "general" ? [] : ["Code Interpreter"]),
   ];
-  const promptButtons = (active.prompts || []).slice(0, 3)
-    .map((prompt) => `<button type="button" data-demo-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`)
+  const scenes = active.demoScenes || (active.prompts || []).map((prompt, index) => ({
+    label: `${index + 1}. Starter`,
+    title: prompt,
+    prompt,
+  }));
+  const promptButtons = scenes.slice(0, 3)
+    .map((scene) => `<button type="button" data-demo-prompt="${escapeHtml(scene.prompt)}" title="${escapeHtml(scene.title)}">${escapeHtml(scene.label)} · ${escapeHtml(scene.title)}</button>`)
     .join("");
+  const sampleData = active.demoScenes?.[0]?.syntheticData;
+  const sampleDataMarkup = sampleData
+    ? `<details><summary>Synthetic demo data</summary><dl>${Object.entries(sampleData).map(([key, value]) => `<div><dt>${escapeHtml(key.replace(/([A-Z])/g, " $1"))}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("")}</dl></details>`
+    : "";
   const workflow = active.workflow?.length
-    ? `<details class="agent-workflow"><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>`
-    : `<details class="agent-workflow"><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details>`;
+    ? `<div class="agent-workflow"><details><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>${sampleDataMarkup}</div>`
+    : `<div class="agent-workflow"><details><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details></div>`;
   els.agentModeDetail.innerHTML =
     `<div class="agent-detail-copy"><p><b>${escapeHtml(active.name)}</b> - ${escapeHtml(active.summary)}</p>` +
     `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
@@ -869,12 +894,14 @@ function renderWelcome() {
   chips.className = "chips";
   const starters = mode.id === "general"
     ? customer.topics.slice(0, 4).map((topic) => `Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`)
-    : mode.prompts;
-  starters.slice(0, 4).forEach((prompt) => {
+    : (mode.demoScenes || []).map((scene) => scene.prompt);
+  starters.slice(0, 4).forEach((prompt, index) => {
     const button = document.createElement("button");
     button.className = "chip";
     button.type = "button";
-    button.textContent = prompt;
+    button.textContent = mode.id === "general"
+      ? prompt
+      : `${mode.demoScenes[index].label} · ${mode.demoScenes[index].title}`;
     button.addEventListener("click", () => sendMessage(prompt));
     chips.appendChild(button);
   });
@@ -1149,6 +1176,8 @@ async function init() {
   state.cfg = await r.json();
   state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
+  try { state.responseMode = localStorage.getItem("clientsphere.responseMode") || "brief"; } catch {}
+  selectResponseMode(state.responseMode);
   renderCustomerOptions();
   let savedCustomer = state.cfg.defaultCustomerId;
   try { savedCustomer = localStorage.getItem("clientsphere.customer") || savedCustomer; } catch {}
@@ -1168,6 +1197,10 @@ async function init() {
     els.input.style.height = Math.min(els.input.scrollHeight, 140) + "px";
   });
   els.voiceToggle.addEventListener("click", () => setVoiceOn(!state.voiceOn));
+  els.responseModeSeg.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-response-mode]");
+    if (button) selectResponseMode(button.dataset.responseMode);
+  });
   els.attachBtn.addEventListener("click", () => els.imageInput.click());
   els.imageInput.addEventListener("change", () => selectImage(els.imageInput.files?.[0]));
   els.attachmentRemove.addEventListener("click", clearAttachment);

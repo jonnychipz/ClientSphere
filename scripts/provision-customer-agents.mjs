@@ -1,7 +1,9 @@
 import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { toFile } from "openai";
 import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { customers } from "../customer-registry.mjs";
@@ -29,9 +31,9 @@ for await (const agent of project.agents.list({ limit: 100, order: "desc" })) {
 
 for await (const store of openAI.vectorStores.list({ limit: 100, order: "desc" })) {
   if (!store.name?.startsWith("clientsphere-")) continue;
-  const ids = existingStoresByName.get(store.name) || [];
-  ids.push(store.id);
-  existingStoresByName.set(store.name, ids);
+  const stores = existingStoresByName.get(store.name) || [];
+  stores.push(store);
+  existingStoresByName.set(store.name, stores);
 }
 
 if (fs.existsSync(outputPath)) {
@@ -49,15 +51,93 @@ const functionTool = {
   },
 };
 
-async function createKnowledgeStore(storeName, files) {
-  const store = await openAI.vectorStores.create({ name: storeName });
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function uploadFileWithRetry(storeId, file) {
+  const bytes = fs.readFileSync(file.path);
+  const filename = path.basename(file.path);
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let fileInfo;
+    let attached = false;
+    try {
+      const uploadable = await toFile(bytes, filename, { type: "text/markdown" });
+      fileInfo = await openAI.files.create({
+        file: uploadable,
+        purpose: "assistants",
+      }, {
+        timeout: 2 * 60 * 1000,
+      });
+
+      let indexed;
+      for (let pollAttempt = 1; pollAttempt <= 3; pollAttempt++) {
+        try {
+          if (!attached) {
+            await openAI.vectorStores.files.create(storeId, { file_id: fileInfo.id });
+            attached = true;
+          }
+          indexed = await openAI.vectorStores.files.poll(storeId, fileInfo.id, {
+            pollIntervalMs: 1000,
+            timeout: 8 * 60 * 1000,
+          });
+          break;
+        } catch (error) {
+          lastError = error;
+          if (pollAttempt === 3) throw error;
+          console.warn(`  Polling ${filename} failed (${error.status || error.code || error.message}); retrying by file ID...`);
+          await wait(pollAttempt * 2000);
+        }
+      }
+
+      if (indexed?.status !== "completed") {
+        const detail = indexed?.last_error
+          ? `${indexed.last_error.code}: ${indexed.last_error.message}`
+          : `status ${indexed?.status || "unknown"}`;
+        throw new Error(`Indexing ${filename} failed: ${detail}`);
+      }
+      return indexed;
+    } catch (error) {
+      lastError = error;
+      if (fileInfo?.id) {
+        if (attached) {
+          await openAI.vectorStores.files.delete(fileInfo.id, { vector_store_id: storeId }).catch(() => {});
+        }
+        await openAI.files.delete(fileInfo.id).catch(() => {});
+      }
+      if (attempt === 3) break;
+      console.warn(`  Upload ${filename} failed (${error.status || error.code || error.message}); retrying...`);
+      await wait(attempt * 2500);
+    }
+  }
+  throw lastError;
+}
+
+function contentAddressedStoreName(baseName, files) {
+  const hash = crypto.createHash("sha256");
+  for (const file of files) {
+    hash.update(path.basename(file.path));
+    hash.update(fs.readFileSync(file.path));
+  }
+  return `${baseName}-${hash.digest("hex").slice(0, 12)}`;
+}
+
+async function createKnowledgeStore(baseName, files) {
+  const storeName = contentAddressedStoreName(baseName, files);
+  const reusable = (existingStoresByName.get(storeName) || [])
+    .find((store) => store.status === "completed" && store.file_counts.completed === files.length);
+  if (reusable) {
+    console.log(`  Reusing indexed knowledge store ${reusable.id}.`);
+    return { store: reusable, fileMap: {} };
+  }
+
+  const store = await openAI.vectorStores.create({
+    name: storeName,
+    metadata: { clientsphereManaged: "true", contentHash: storeName.slice(-12) },
+  });
   const fileMap = {};
   try {
     for (const file of files) {
-      const uploaded = await openAI.vectorStores.files.uploadAndPoll(
-        store.id,
-        fs.createReadStream(file.path),
-      );
+      const uploaded = await uploadFileWithRetry(store.id, file);
       fileMap[uploaded.id] = file.label;
     }
   } catch (error) {
@@ -83,6 +163,9 @@ async function upsertAgent({
     tools: [
       { type: "file_search", vector_store_ids: [vectorStoreId] },
       functionTool,
+      ...(mode === "general" || mode === "portfolio"
+        ? []
+        : [{ type: "code_interpreter", container: { type: "auto" } }]),
     ],
   };
   const options = {
@@ -165,7 +248,9 @@ for (const customer of customers) {
   await cleanupStores([
     previousMetadata?.customers?.[customer.id]?.vectorStoreId,
     previousMetadata?.customers?.[customer.id]?.general?.vectorStoreId,
-    ...(existingStoresByName.get(`clientsphere-${customer.id}-kb`) || []),
+    ...[...existingStoresByName.entries()]
+      .filter(([name]) => name.startsWith(`clientsphere-${customer.id}-kb-`))
+      .flatMap(([, stores]) => stores.map((store) => store.id)),
   ], store.id);
   metadata.customers[customer.id] = {
     agentName,
@@ -207,7 +292,9 @@ You are the generic ClientSphere portfolio guide. Help the user select the right
 });
 await cleanupStores([
   previousMetadata?.portfolio?.vectorStoreId,
-  ...(existingStoresByName.get("clientsphere-portfolio-kb") || []),
+  ...[...existingStoresByName.entries()]
+    .filter(([name]) => name.startsWith("clientsphere-portfolio-kb-"))
+    .flatMap(([, stores]) => stores.map((store) => store.id)),
 ], portfolioKnowledge.store.id);
 metadata.portfolio = {
   agentName: portfolioName,

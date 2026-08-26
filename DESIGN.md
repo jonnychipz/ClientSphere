@@ -28,6 +28,8 @@ Use `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif` throughout. Product
 - The active customer selector is part of the persistent header and is keyboard searchable.
 - The customer intelligence drawer contains overview, business, offerings, initiatives, financials, leadership, news, and sources.
 - The conversation header contains a persistent four-tile agent switcher: General Adviser first, then three synthetic use cases with an active-mode detail panel, model/modality badges, workflow disclosure, and demo starters.
+- A two-state response control sits beside the active mode: `Brief + voice` for concise avatar turns and `Structured` for detailed screen-first artefacts.
+- Synthetic modes expose three numbered scenes and a collapsible sample-data panel so the presenter can run a credible demo without typing, while the composer always remains available for free-text questions.
 - Tablet: preserve two panes while reducing stage controls.
 - Mobile: stack the customer stage above chat, keep the composer sticky, and move secondary controls into an inline disclosure.
 
