@@ -60,7 +60,7 @@ async function createKnowledgeStore(storeName, files) {
       fileMap[uploaded.id] = file.label;
     }
   } catch (error) {
-    await openAI.vectorStores.del(store.id).catch(() => {});
+    await openAI.vectorStores.delete(store.id).catch(() => {});
     throw error;
   }
   return { store, fileMap };
@@ -95,7 +95,7 @@ async function upsertAgent({
     : await project.agents.create(name, definition, options);
   for (const previousStoreId of new Set(previousStoreIds || [])) {
     if (!previousStoreId || previousStoreId === vectorStoreId) continue;
-    await openAI.vectorStores.del(previousStoreId).catch((error) => {
+    await openAI.vectorStores.delete(previousStoreId).catch((error) => {
       console.warn(`Could not delete previous vector store ${previousStoreId}: ${error.message}`);
     });
   }
