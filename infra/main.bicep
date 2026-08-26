@@ -149,6 +149,9 @@ resource lunaModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
     raiPolicyName: 'Microsoft.Default'
     versionUpgradeOption: 'OnceCurrentVersionExpired'
   }
+  dependsOn: [
+    modelDeployment
+  ]
 }
 
 resource terraModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
@@ -167,6 +170,9 @@ resource terraModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@
     raiPolicyName: 'Microsoft.Default'
     versionUpgradeOption: 'OnceCurrentVersionExpired'
   }
+  dependsOn: [
+    lunaModelDeployment
+  ]
 }
 
 resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
