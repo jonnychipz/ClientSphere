@@ -21,12 +21,12 @@ if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(endpoint, credential);
 const openAI = project.getOpenAIClient();
-const existingAgents = new Set();
+const existingAgents = new Map();
 const existingStoresByName = new Map();
 let previousMetadata = null;
 
 for await (const agent of project.agents.list({ limit: 100, order: "desc" })) {
-  existingAgents.add(agent.name);
+  existingAgents.set(agent.name, agent);
 }
 
 for await (const store of openAI.vectorStores.list({ limit: 100, order: "desc" })) {
@@ -116,7 +116,9 @@ function contentAddressedStoreName(baseName, files) {
   const hash = crypto.createHash("sha256");
   for (const file of files) {
     hash.update(path.basename(file.path));
-    hash.update(fs.readFileSync(file.path));
+    const content = fs.readFileSync(file.path, "utf8")
+      .replace(/^- Retrieved:.*$/m, "- Retrieved: <normalized>");
+    hash.update(content);
   }
   return `${baseName}-${hash.digest("hex").slice(0, 12)}`;
 }

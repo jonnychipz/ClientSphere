@@ -45,7 +45,7 @@ export const customers = Object.freeze(rawCustomers.map((customer) => {
   return Object.freeze({
     ...customer,
     domain: url.hostname.replace(/^www\./, ""),
-    logoUrl: `${url.origin}/favicon.ico`,
+    logoUrl: `/customer-logos/${customer.id}`,
     initials: initials(customer.name),
   });
 }));

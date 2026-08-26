@@ -79,6 +79,7 @@ const els = {
   speakingBar: document.getElementById("speakingBar"),
   tagline: document.getElementById("tagline"),
   customerPopover: document.getElementById("customerPopover"),
+  customerTrigger: document.getElementById("customerTrigger"),
   customerSearch: document.getElementById("customerSearch"),
   customerOptions: document.getElementById("customerOptions"),
   customerCount: document.getElementById("customerCount"),
@@ -86,6 +87,7 @@ const els = {
   customerInitials: document.getElementById("customerInitials"),
   customerName: document.getElementById("customerName"),
   customerSector: document.getElementById("customerSector"),
+  customerOverline: document.getElementById("customerOverline"),
   agentModeGrid: document.getElementById("agentModeGrid"),
   agentModeDetail: document.getElementById("agentModeDetail"),
   agentModeBadge: document.getElementById("agentModeBadge"),
@@ -105,6 +107,8 @@ const els = {
 const state = {
   cfg: null,
   customer: null,
+  customerLoading: false,
+  customerLoadId: 0,
   resources: [],
   agentMode: "general",
   responseMode: "brief",
@@ -125,8 +129,11 @@ const state = {
   speechConfig: null,
   tokenInfo: null,
   avatarSynth: null,
+  speechSynth: null,
   peer: null,
   avatarLive: false,
+  voiceFallback: false,
+  voiceConnectionGeneration: 0,
   recognizer: null,
   listening: false,
   speaking: false,
@@ -146,6 +153,15 @@ function toast(msg, ms = 4200) {
   els.toast.classList.add("show");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => els.toast.classList.remove("show"), ms);
+}
+
+function setCustomerControlsDisabled(disabled) {
+  const controls = [
+    els.input, els.sendBtn, els.voiceToggle, els.roleplayBtn,
+    els.briefBtn, els.recapBtn, els.attachBtn,
+  ];
+  controls.forEach((control) => { if (control) control.disabled = disabled; });
+  els.agentModeGrid?.querySelectorAll("button").forEach((control) => { control.disabled = disabled; });
 }
 function setStatus(text, cls) {
   els.status.textContent = text;
@@ -206,6 +222,11 @@ function addTyping() {
 // never fire a second /api/chat while one is in flight. A new request that
 // arrives mid-run is held as the single pending item and sent when the run ends.
 async function sendMessage(text) {
+  if (state.customerLoading || !state.customer) {
+    toast("Choose a customer before starting a conversation.");
+    showCustomerSelector();
+    return;
+  }
   text = (text || "").trim();
   if (!text) return;
   // Detect "I'm wrapping up" intent so we don't reopen the mic after the reply.
@@ -225,6 +246,10 @@ async function sendMessage(text) {
 //   speak     — false to skip TTS for this reply
 //   onReply   — fn(data) to handle the reply instead of rendering a bot bubble
 function dispatch(prompt, opts = {}) {
+  if (state.customerLoading || !state.customer) {
+    toast("Wait for the customer to finish loading.");
+    return;
+  }
   interruptAvatar();
   stopListening();
   if (opts.userText) addMessage("user", opts.userText);
@@ -280,7 +305,7 @@ async function runChat(prompt, opts = {}) {
       opts.onReply(data);
     } else {
       addMessage("bot", data.reply, data.citations);
-      if (data.responseMode === "brief" && state.voiceOn && state.avatarLive && opts.speak !== false) speak(data.reply);
+      if (data.responseMode === "brief" && state.voiceOn && (state.avatarLive || state.voiceFallback) && opts.speak !== false) speak(data.reply);
     }
   } catch (err) {
     if (typing) typing.remove();
@@ -305,7 +330,10 @@ function kickoffGreeting() {
   if (state.greeted) return;
   state.greeted = true;
   const mode = currentModeDefinition();
-  dispatch(`[SYSTEM: The user just turned on voice mode for ${state.customer.name}. Greet them in one or two short sentences, identify yourself as the ${mode.name}, and ask what they want to discuss or demonstrate.]`, {});
+  const fullName = state.me?.name && state.me.name.toLowerCase() !== state.me.login?.toLowerCase()
+    ? state.me.name
+    : "the user";
+  dispatch(`[SYSTEM: ${fullName} just turned on voice mode for ${state.customer.name}. Greet ${fullName} by first name in one or two short sentences, identify yourself as the ${mode.name}, and ask what they want to discuss or demonstrate.]`, {});
 }
 
 // Strip citation markers / markdown so the avatar speaks naturally
@@ -326,13 +354,34 @@ function interruptAvatar(manual) {
   if (state.avatarSynth && state.speaking) {
     try { state.avatarSynth.stopSpeakingAsync(); } catch (e) { /* ignore */ }
   }
+  if (state.speechSynth && state.speaking) {
+    try { state.speechSynth.stopSpeakingAsync(); } catch (e) { /* ignore */ }
+  }
+  try { window.speechSynthesis?.cancel(); } catch {}
   state.speaking = false;
   els.speakingBar.classList.remove("on");
   els.stopBtn.hidden = true;
 }
 
+function speakWithBrowser(text) {
+  if (!("speechSynthesis" in window)) return Promise.reject(new Error("Browser speech synthesis is unavailable."));
+  return new Promise((resolve, reject) => {
+    const utterance = new SpeechSynthesisUtterance(speakable(text));
+    utterance.lang = state.voice?.startsWith("en-US") ? "en-US" :
+      state.voice?.startsWith("en-AU") ? "en-AU" : "en-GB";
+    const voices = window.speechSynthesis.getVoices();
+    const matching = voices.find((voice) => voice.lang.toLowerCase() === utterance.lang.toLowerCase()) ||
+      voices.find((voice) => voice.lang.toLowerCase().startsWith(utterance.lang.slice(0, 2).toLowerCase()));
+    if (matching) utterance.voice = matching;
+    utterance.onend = resolve;
+    utterance.onerror = (event) => reject(new Error(event.error || "Browser speech synthesis failed."));
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 async function speak(text) {
-  if (!state.avatarSynth) return;
+  const synthesizer = state.avatarLive ? state.avatarSynth : state.speechSynth;
+  if (!synthesizer) return;
   interruptAvatar(); // clear any in-flight speech first
   state.stoppedManually = false;
   // Personal voice (cloned) is spoken via a base model voice with the speaker
@@ -349,20 +398,42 @@ async function speak(text) {
   els.stopBtn.hidden = false;
   state.speaking = true;
   try {
-    await state.avatarSynth.speakSsmlAsync(ssml);
+    if (state.avatarLive) {
+      const result = await state.avatarSynth.speakSsmlAsync(ssml);
+      if (result.reason === SDK.ResultReason.Canceled) {
+        const cancellation = SDK.CancellationDetails.fromResult(result);
+        throw new Error(cancellation.errorDetails || "Avatar speech synthesis was cancelled.");
+      }
+    } else {
+      await new Promise((resolve, reject) => {
+        synthesizer.speakSsmlAsync(
+          ssml,
+          (result) => {
+            if (result.reason === SDK.ResultReason.Canceled) {
+              const cancellation = SDK.CancellationDetails.fromResult(result);
+              reject(new Error(cancellation.errorDetails || "Speech synthesis was cancelled."));
+            } else {
+              resolve(result);
+            }
+          },
+          reject,
+        );
+      });
+    }
   } catch (e) {
-    console.warn("speak failed", e);
+    console.warn("Azure speech failed; using browser speech", e);
+    try { await speakWithBrowser(text); } catch (fallbackError) { console.warn("browser speech failed", fallbackError); }
   } finally {
     state.speaking = false;
     els.speakingBar.classList.remove("on");
     els.stopBtn.hidden = true;
     // Hand the conversation back: re-open the mic so the user can just talk —
     // unless the user pressed Stop, or signalled they're ending the call.
-    const canReopen = state.voiceOn && state.avatarLive && !state.listening &&
+    const canReopen = state.voiceOn && (state.avatarLive || state.voiceFallback) && !state.listening &&
       !state.stoppedManually && !state.endCall;
     if (canReopen) {
       setTimeout(() => {
-        if (state.voiceOn && state.avatarLive && !state.listening && !state.stoppedManually && !state.endCall) startListening();
+        if (state.voiceOn && (state.avatarLive || state.voiceFallback) && !state.listening && !state.stoppedManually && !state.endCall) startListening();
       }, 450);
     }
   }
@@ -382,7 +453,7 @@ async function refreshToken() {
 }
 
 // ---------- avatar ----------
-async function startAvatar() {
+async function startAvatar(connectionGeneration) {
   setStatus("connecting", "connecting");
   await refreshToken();
   const relayRes = await fetch("/api/relay-token");
@@ -407,8 +478,17 @@ async function startAvatar() {
   const synth = new SDK.AvatarSynthesizer(state.speechConfig, avatarConfig);
   state.avatarSynth = synth;
 
+  const relayUrls = Array.isArray(relay.Urls) ? [...relay.Urls] : [relay.Urls];
+  for (const url of [...relayUrls]) {
+    const match = /^turn:([^:]+):3478$/i.exec(url);
+    if (match) {
+      relayUrls.push(`turn:${match[1]}:3478?transport=tcp`);
+      relayUrls.push(`turn:${match[1]}:443?transport=tcp`);
+    }
+  }
   const peer = new RTCPeerConnection({
-    iceServers: [{ urls: relay.Urls, username: relay.Username, credential: relay.Password }],
+    iceTransportPolicy: "relay",
+    iceServers: [{ urls: [...new Set(relayUrls)], username: relay.Username, credential: relay.Password }],
   });
   state.peer = peer;
 
@@ -426,6 +506,13 @@ async function startAvatar() {
   peer.addTransceiver("audio", { direction: "sendrecv" });
 
   const result = await synth.startAvatarAsync(peer);
+  if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) {
+    try { synth.close(); } catch {}
+    try { peer.close(); } catch {}
+    const error = new Error("Voice connection was cancelled.");
+    error.name = "AbortError";
+    throw error;
+  }
   if (result.reason === SDK.ResultReason.SynthesizingAudioCompleted || result.reason === undefined) {
     state.avatarLive = true;
     setStatus("live", "live");
@@ -439,6 +526,51 @@ async function startAvatar() {
     } catch {}
     throw new Error("Avatar failed to start (" + detail + ")");
   }
+}
+
+async function startVoiceOnly(connectionGeneration) {
+  if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) {
+    const error = new Error("Voice connection was cancelled.");
+    error.name = "AbortError";
+    throw error;
+  }
+  await refreshToken();
+  state.speechConfig.speechSynthesisVoiceName = state.voice;
+  state.speechConfig.endpointId = state.voiceEndpointId || "";
+  const audioConfig = SDK.AudioConfig.fromDefaultSpeakerOutput();
+  state.speechSynth = new SDK.SpeechSynthesizer(state.speechConfig, audioConfig);
+  state.voiceFallback = true;
+  state.avatarLive = false;
+  setStatus("voice only", "live");
+  els.idle.classList.remove("hide");
+  els.avatarIdleCopy.textContent = "Voice is connected. Avatar video is unavailable on this network.";
+  showBgPicker(false);
+}
+
+async function startVoiceExperience(connectionGeneration) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) {
+      const error = new Error("Voice connection was cancelled.");
+      error.name = "AbortError";
+      throw error;
+    }
+    try {
+      await startAvatar(connectionGeneration);
+      return { avatar: true };
+    } catch (error) {
+      lastError = error;
+      console.warn(`Avatar connection attempt ${attempt} failed`, error);
+      if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) throw error;
+      stopAvatar();
+      if (attempt < 3) {
+        toast(`Avatar connection attempt ${attempt} failed. Retrying...`, 2500);
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1800));
+      }
+    }
+  }
+  await startVoiceOnly(connectionGeneration);
+  return { avatar: false, error: lastError };
 }
 
 // Draw the avatar video to a canvas each frame, making the green backdrop
@@ -481,10 +613,13 @@ function stopAvatar() {
   stopChromaLoop();
   clearBackdrop();
   try { state.avatarSynth && state.avatarSynth.close(); } catch {}
+  try { state.speechSynth && state.speechSynth.close(); } catch {}
   try { state.peer && state.peer.close(); } catch {}
   state.avatarSynth = null;
+  state.speechSynth = null;
   state.peer = null;
   state.avatarLive = false;
+  state.voiceFallback = false;
   els.video.srcObject = null;
   els.idle.classList.remove("hide");
   els.speakingBar.classList.remove("on");
@@ -495,6 +630,7 @@ function stopAvatar() {
 
 // ---------- voice toggle ----------
 async function setVoiceOn(on) {
+  const connectionGeneration = ++state.voiceConnectionGeneration;
   state.voiceOn = on;
   els.voiceToggle.setAttribute("aria-checked", String(on));
   els.voiceToggleLbl.textContent = on ? "On" : "Off";
@@ -502,13 +638,18 @@ async function setVoiceOn(on) {
     try {
       state.endCall = false;
       toast("Starting the ClientSphere avatar. This can take a few seconds.");
-      await startAvatar();
+      const connection = await startVoiceExperience(connectionGeneration);
+      if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) return;
       els.micBtn.disabled = false;
-      toast("Voice assistant is live. The customer adviser will say hello.");
+      toast(connection.avatar
+        ? "Avatar and voice are live. The customer adviser will say hello."
+        : "Voice is live; avatar video is blocked on this network. Microphone conversation remains available.",
+      6500);
       kickoffGreeting(); // greet + ask name, then auto-open the mic
     } catch (e) {
+      if (e.name === "AbortError" || connectionGeneration !== state.voiceConnectionGeneration) return;
       console.error(e);
-      toast("Couldn't start the avatar: " + e.message);
+      toast("Couldn't start the voice experience: " + e.message);
       state.voiceOn = false;
       els.voiceToggle.setAttribute("aria-checked", "false");
       els.voiceToggleLbl.textContent = "Off";
@@ -532,27 +673,73 @@ async function startListening() {
   state.endCall = false;
   state.stoppedManually = false;
   if (!state.speechConfig) await refreshToken();
-  const audioConfig = SDK.AudioConfig.fromDefaultMicrophoneInput();
-  const rec = new SDK.SpeechRecognizer(state.speechConfig, audioConfig);
-  state.recognizer = rec;
+  try {
+    const audioConfig = SDK.AudioConfig.fromDefaultMicrophoneInput();
+    const rec = new SDK.SpeechRecognizer(state.speechConfig, audioConfig);
+    state.recognizer = rec;
+    state.listening = true;
+    els.micBtn.classList.add("listening");
+    rec.recognizeOnceAsync(
+      (result) => {
+        stopListening();
+        if (result.reason === SDK.ResultReason.RecognizedSpeech && result.text) {
+          sendMessage(result.text);
+        } else {
+          startBrowserListening();
+        }
+      },
+      (err) => {
+        console.warn("Azure microphone recognition failed; using browser recognition", err);
+        stopListening();
+        startBrowserListening();
+      },
+    );
+  } catch (error) {
+    console.warn("Azure microphone setup failed; using browser recognition", error);
+    stopListening();
+    startBrowserListening();
+  }
+}
+
+function startBrowserListening() {
+  const BrowserRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!BrowserRecognition) {
+    toast("Microphone recognition is unavailable in this browser.");
+    return;
+  }
+  const recognition = new BrowserRecognition();
+  recognition.lang = "en-GB";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  state.recognizer = recognition;
   state.listening = true;
   els.micBtn.classList.add("listening");
-  rec.recognizeOnceAsync(
-    (result) => {
-      stopListening();
-      if (result.reason === SDK.ResultReason.RecognizedSpeech && result.text) {
-        sendMessage(result.text);
-      } else {
-        toast("Didn't catch that — try again.");
-      }
-    },
-    (err) => { stopListening(); toast("Mic error: " + err); }
-  );
+  recognition.onresult = (event) => {
+    const text = event.results?.[0]?.[0]?.transcript;
+    stopListening();
+    if (text) sendMessage(text);
+    else toast("Didn't catch that — try again.");
+  };
+  recognition.onerror = (event) => {
+    stopListening();
+    toast(`Microphone error: ${event.error || "recognition failed"}`);
+  };
+  recognition.onend = () => {
+    if (state.listening) stopListening();
+  };
+  recognition.start();
 }
+
 function stopListening() {
   state.listening = false;
   els.micBtn.classList.remove("listening");
-  if (state.recognizer) { try { state.recognizer.close(); } catch {} state.recognizer = null; }
+  if (state.recognizer) {
+    try {
+      if (typeof state.recognizer.close === "function") state.recognizer.close();
+      else if (typeof state.recognizer.abort === "function") state.recognizer.abort();
+    } catch {}
+    state.recognizer = null;
+  }
 }
 
 // ---------- gender / voice / body pickers ----------
@@ -624,19 +811,19 @@ function populateVoices() {
 async function restartAvatarIfLive(msg) {
   if (!state.voiceOn) return;
   stopAvatar();
+  state.voiceOn = true;
+  const connectionGeneration = ++state.voiceConnectionGeneration;
   setStatus("connecting", "connecting");
   // Give the service a moment to release the previous avatar session, otherwise
   // the new one is rejected as a concurrent request (throttle 4429).
   await new Promise((r) => setTimeout(r, 1400));
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try { await startAvatar(); return; }
-    catch (e) {
-      const throttled = /throttl|4429|concurrent/i.test(e.message || "");
-      if (throttled && attempt < 2) { await new Promise((r) => setTimeout(r, 2500)); continue; }
-      toast((msg || "Avatar restart failed") + ": " + e.message);
-      setStatus("offline");
-      return;
-    }
+  try {
+    const connection = await startVoiceExperience(connectionGeneration);
+    if (connectionGeneration !== state.voiceConnectionGeneration || !state.voiceOn) return;
+    if (!connection.avatar) toast("Voice switched; avatar video remains unavailable on this network.");
+  } catch (error) {
+    toast((msg || "Voice restart failed") + ": " + error.message);
+    setStatus("offline");
   }
 }
 
@@ -756,6 +943,54 @@ function setCustomerLogo(customer) {
   els.customerLogo.alt = `${customer.name} logo`;
 }
 
+function showCustomerSelector() {
+  try {
+    if (!els.customerPopover.matches(":popover-open")) els.customerPopover.showPopover();
+  } catch {
+    els.customerPopover.setAttribute("open", "");
+  }
+  els.customerSearch.value = "";
+  renderCustomerOptions();
+  setTimeout(() => els.customerSearch.focus(), 0);
+}
+
+function setCustomerRequired(required) {
+  document.body.classList.toggle("customer-required", required);
+  setCustomerControlsDisabled(required);
+  if (!required) return;
+  state.customer = null;
+  state.resources = [];
+  state.threadId = null;
+  state.agentMode = "general";
+  els.customerOverline.textContent = "Choose customer";
+  els.customerName.textContent = "No customer selected";
+  els.customerSector.textContent = "Select a customer to begin";
+  els.customerLogo.hidden = true;
+  els.customerInitials.hidden = false;
+  els.customerInitials.textContent = "?";
+  els.avatarIdleCopy.textContent = "Choose a customer to load its advisers.";
+  els.input.placeholder = "Choose a customer before starting a conversation";
+  els.agentModeGrid.innerHTML = "";
+  els.agentModeDetail.innerHTML = "<div class=\"agent-detail-copy\"><p>Select a customer to load its general adviser and three tailored synthetic demo agents.</p></div>";
+  els.agentModeBadge.textContent = "Waiting";
+  els.messages.innerHTML =
+    '<div class="msg bot welcome"><div class="bubble"><p><b>Choose a customer to begin.</b> ClientSphere will then load that customer’s public intelligence, concise adviser, and three synthetic demo agents.</p><div class="chips"><button class="chip" id="chooseCustomerPrompt" type="button">Choose customer</button></div></div></div>';
+  document.getElementById("chooseCustomerPrompt")?.addEventListener("click", showCustomerSelector);
+  renderResources();
+}
+
+function setCustomerLoading(loading, candidate) {
+  state.customerLoading = loading;
+  els.customerTrigger.setAttribute("aria-busy", String(loading));
+  setCustomerControlsDisabled(loading || !state.customer);
+  if (loading) {
+    els.customerOverline.textContent = "Loading customer";
+    els.customerName.textContent = candidate.name;
+    els.customerSector.textContent = "Loading public intelligence and advisers...";
+    els.avatarIdleCopy.textContent = "Loading customer advisers...";
+  }
+}
+
 function generalModeDefinition() {
   return {
     id: "general",
@@ -854,6 +1089,7 @@ function renderAgentModes() {
 }
 
 function selectAgentMode(modeId, options = {}) {
+  if (state.customerLoading) return;
   const mode = agentModes().find((item) => item.id === modeId);
   if (!mode || (modeId === state.agentMode && options.force !== true)) return;
   interruptAvatar();
@@ -928,6 +1164,8 @@ function renderCustomerOptions(query = "") {
     const img = document.createElement("img");
     img.src = customer.logoUrl;
     img.alt = "";
+    img.loading = "lazy";
+    img.decoding = "async";
     const fallback = document.createElement("span");
     fallback.textContent = customer.initials;
     img.onload = () => { fallback.hidden = true; };
@@ -942,7 +1180,19 @@ function renderCustomerOptions(query = "") {
     meta.textContent = `${customer.sector} - ${customer.domain}`;
     copy.append(name, meta);
     button.append(logo, copy);
-    button.addEventListener("click", () => selectCustomer(customer.id));
+    button.addEventListener("click", async () => {
+      if (els.customerOptions.getAttribute("aria-busy") === "true") return;
+      els.customerOptions.setAttribute("aria-busy", "true");
+      [...els.customerOptions.querySelectorAll("button")].forEach((item) => { item.disabled = true; });
+      try {
+        await selectCustomer(customer.id);
+      } catch (error) {
+        toast(`Could not load ${customer.name}: ${error.message}`);
+      } finally {
+        els.customerOptions.removeAttribute("aria-busy");
+        [...els.customerOptions.querySelectorAll("button")].forEach((item) => { item.disabled = false; });
+      }
+    });
     els.customerOptions.appendChild(button);
   }
   els.customerCount.textContent = `${matches.length} of ${state.cfg.customers.length}`;
@@ -951,9 +1201,21 @@ function renderCustomerOptions(query = "") {
 async function selectCustomer(customerId, options = {}) {
   const customer = state.cfg.customers.find((item) => item.id === customerId);
   if (!customer) return;
+  const previousCustomer = state.customer;
+  const previousResources = state.resources;
+  const previousConversation = {
+    threadId: state.threadId,
+    pending: state.pending,
+    greeted: state.greeted,
+    roleplayActive: state.roleplayActive,
+    agentMode: state.agentMode,
+    messages: els.messages.innerHTML,
+    roleplayBannerHidden: els.roleplayBanner.hidden,
+  };
   interruptAvatar();
   stopListening();
   state.generation += 1;
+  const customerLoadId = ++state.customerLoadId;
   state.busy = false;
   els.sendBtn.disabled = false;
   state.threadId = null;
@@ -961,30 +1223,60 @@ async function selectCustomer(customerId, options = {}) {
   state.greeted = false;
   state.roleplayActive = false;
   els.roleplayBanner.hidden = true;
+  setCustomerLoading(true, customer);
 
-  const generation = state.generation;
-  const response = await fetch(`/api/customers/${encodeURIComponent(customer.id)}`);
-  const data = await response.json();
-  if (generation !== state.generation) return;
-  if (!response.ok) throw new Error(data.error || "Could not load customer.");
-  state.customer = data.customer;
-  state.resources = data.resources;
-  setCustomerLogo(state.customer);
-  els.customerName.textContent = state.customer.name;
-  els.customerSector.textContent = state.customer.sector;
-  els.drawerTitle.textContent = `${state.customer.name} intelligence`;
-  let savedMode = "general";
-  try { savedMode = localStorage.getItem(`clientsphere.agentMode.${state.customer.id}`) || "general"; } catch {}
-  if (!["general", ...(state.customer.useCases || []).map((useCase) => useCase.id)].includes(savedMode)) savedMode = "general";
-  state.agentMode = savedMode;
-  clearAttachment();
-  renderAgentModes();
-  renderWelcome();
-  renderResources();
-  renderCustomerOptions(els.customerSearch.value);
-  try { localStorage.setItem("clientsphere.customer", state.customer.id); } catch {}
-  if (els.customerPopover.matches(":popover-open")) els.customerPopover.hidePopover();
-  if (options.announce !== false) toast(`${state.customer.name} adviser loaded. New conversation started.`);
+  try {
+    const response = await fetch(`/api/customers/${encodeURIComponent(customer.id)}`);
+    const data = await response.json();
+    if (customerLoadId !== state.customerLoadId) return;
+    if (!response.ok) throw new Error(data.error || "Could not load customer.");
+    state.customer = data.customer;
+    state.resources = data.resources;
+    document.body.classList.remove("customer-required");
+    setCustomerLogo(state.customer);
+    els.customerOverline.textContent = "Active customer";
+    els.customerName.textContent = state.customer.name;
+    els.customerSector.textContent = state.customer.sector;
+    els.drawerTitle.textContent = `${state.customer.name} intelligence`;
+    let savedMode = "general";
+    try { savedMode = localStorage.getItem(`clientsphere.agentMode.${state.customer.id}`) || "general"; } catch {}
+    if (!["general", ...(state.customer.useCases || []).map((useCase) => useCase.id)].includes(savedMode)) savedMode = "general";
+    state.agentMode = savedMode;
+    clearAttachment();
+    renderAgentModes();
+    renderWelcome();
+    renderResources();
+    renderCustomerOptions(els.customerSearch.value);
+    try { localStorage.setItem("clientsphere.customer", state.customer.id); } catch {}
+    try { if (els.customerPopover.matches(":popover-open")) els.customerPopover.hidePopover(); } catch {}
+    if (options.announce !== false) toast(`${state.customer.name} adviser loaded. New conversation started.`);
+  } catch (error) {
+    state.customer = previousCustomer;
+    state.resources = previousResources;
+    if (previousCustomer) {
+      state.threadId = previousConversation.threadId;
+      state.pending = previousConversation.pending;
+      state.greeted = previousConversation.greeted;
+      state.roleplayActive = previousConversation.roleplayActive;
+      state.agentMode = previousConversation.agentMode;
+      els.roleplayBanner.hidden = previousConversation.roleplayBannerHidden;
+      setCustomerLogo(previousCustomer);
+      els.customerOverline.textContent = "Active customer";
+      els.customerName.textContent = previousCustomer.name;
+      els.customerSector.textContent = previousCustomer.sector;
+      renderAgentModes();
+      els.messages.innerHTML = previousConversation.messages;
+      renderResources();
+    } else {
+      setCustomerRequired(true);
+    }
+    throw error;
+  } finally {
+    if (customerLoadId === state.customerLoadId) {
+      setCustomerLoading(false);
+      if (state.customer) renderAgentModes();
+    }
+  }
 }
 
 function renderResources() {
@@ -1179,10 +1471,21 @@ async function init() {
   try { state.responseMode = localStorage.getItem("clientsphere.responseMode") || "brief"; } catch {}
   selectResponseMode(state.responseMode);
   renderCustomerOptions();
-  let savedCustomer = state.cfg.defaultCustomerId;
-  try { savedCustomer = localStorage.getItem("clientsphere.customer") || savedCustomer; } catch {}
-  if (!state.cfg.customers.some((customer) => customer.id === savedCustomer)) savedCustomer = state.cfg.defaultCustomerId;
-  await selectCustomer(savedCustomer, { announce: false });
+  let savedCustomer = null;
+  try { savedCustomer = localStorage.getItem("clientsphere.customer"); } catch {}
+  if (savedCustomer && state.cfg.customers.some((customer) => customer.id === savedCustomer)) {
+    try {
+      await selectCustomer(savedCustomer, { announce: false });
+    } catch (error) {
+      console.warn("Saved customer could not be loaded", error);
+      try { localStorage.removeItem("clientsphere.customer"); } catch {}
+      setCustomerRequired(true);
+      requestAnimationFrame(showCustomerSelector);
+    }
+  } else {
+    setCustomerRequired(true);
+    requestAnimationFrame(showCustomerSelector);
+  }
   populateVoices();
   renderBackgrounds(); // randomises on first load (applied when avatar is shown)
   renderResources();

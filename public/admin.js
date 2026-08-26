@@ -26,20 +26,38 @@ async function api(path, body) {
 }
 
 async function decide(login, decision) { if (await api("/api/admin/decide", { login, decision })) { toast(`@${login} → ${decision}`); load(); } }
-async function delUser(login) { if (!confirm(`Delete @${login}? This removes their account and data.`)) return; if (await api("/api/admin/delete", { login })) { toast(`@${login} deleted`); load(); } }
-async function setAdmin(login, makeAdmin) { if (await api("/api/admin/set-admin", { login, makeAdmin })) { toast(`@${login} ${makeAdmin ? "promoted to admin" : "admin removed"}`); load(); } }
+async function delUser(login) {
+  if (!confirm(`Delete @${login}? This removes their account and data.`)) return;
+  const result = await api("/api/admin/delete", { login });
+  if (!result) return;
+  if (result.selfDeleted) { location.href = "/login"; return; }
+  toast(`@${login} deleted`);
+  load();
+}
+async function setAdmin(login, makeAdmin) {
+  if (!makeAdmin && !confirm(`Remove administrator access from @${login}?`)) return;
+  const result = await api("/api/admin/set-admin", { login, makeAdmin });
+  if (!result) return;
+  if (result.selfDemoted) { location.href = "/"; return; }
+  toast(`@${login} ${makeAdmin ? "promoted to admin" : "admin removed"}`);
+  load();
+}
 
 function statusBadge(u) {
   const admin = u.effectiveAdmin ? '<span class="badge admin">admin</span>' : "";
   return `<span class="badge ${u.status}">${u.status}</span>${admin}`;
 }
 function rowActions(u) {
-  if (u.bootstrapAdmin) return '<span class="muted" style="font-size:12px;">owner</span>';
+  if (u.soleAdmin) return '<span class="sole-admin">Sole admin · protected</span>';
   const b = [];
   if (u.status !== "approved") b.push(`<button class="act approve" data-l="${esc(u.login)}" data-a="approve">Approve</button>`);
   if (u.status !== "denied") b.push(`<button class="act deny" data-l="${esc(u.login)}" data-a="deny">Deny</button>`);
-  if (u.effectiveAdmin) b.push(`<button class="act revoke" data-l="${esc(u.login)}" data-a="unadmin">Remove admin</button>`);
-  else b.push(`<button class="act admin-make" data-l="${esc(u.login)}" data-a="makeadmin">Make admin</button>`);
+  if (u.effectiveAdmin) {
+    b.length = 0;
+    b.push(`<button class="act revoke" data-l="${esc(u.login)}" data-a="unadmin">Remove admin</button>`);
+  } else if (u.canPromote) {
+    b.push(`<button class="act admin-make" data-l="${esc(u.login)}" data-a="makeadmin">Make admin</button>`);
+  }
   b.push(`<button class="act del" data-l="${esc(u.login)}" data-a="delete">Delete</button>`);
   return `<div class="row-actions">${b.join("")}</div>`;
 }
@@ -104,7 +122,10 @@ async function load() {
   el("adminWho").textContent = `Signed in as ${me.name} (@${me.login}) — admin`;
 
   const [uRes, gRes, lRes, aRes] = await Promise.all([
-    fetch("/api/admin/users").then((r) => r.json()),
+    fetch("/api/admin/users").then(async (r) => {
+      if (r.status === 403) { location.href = "/"; throw new Error("Admin access required"); }
+      return r.json();
+    }),
     fetch("/api/admin/usage").then((r) => r.json()),
     fetch("/api/admin/logs").then((r) => r.json()),
     fetch("/api/admin/avatars").then((r) => r.json()).catch(() => ({ female: [], male: [] })),
@@ -115,11 +136,13 @@ async function load() {
   const pending = users.filter((u) => u.status === "pending").length;
   const approved = users.filter((u) => u.status === "approved").length;
   const denied = users.filter((u) => u.status === "denied").length;
+  const admins = uRes.adminCount || 0;
   el("kpis").innerHTML = [
     ["blue", users.length, "Total users"],
     ["amber", pending, "Pending review"],
     ["green", approved, "Approved"],
     ["", denied, "Denied"],
+    ["", admins, "Administrators"],
   ].map(([c, v, k]) => `<div class="kpi ${c}"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
 
   const order = { pending: 0, approved: 1, denied: 2 };

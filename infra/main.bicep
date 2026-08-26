@@ -34,6 +34,12 @@ param applicationImage string = 'mcr.microsoft.com/azuredocs/containerapps-hello
 @description('Compressed agent metadata preserved across infrastructure updates.')
 param agentStateB64 string = ''
 
+@description('Encrypted access-registry tags preserved across infrastructure updates.')
+param accessStateTags object = {}
+
+@description('Blocks access-registry mutations while a deployment snapshots and reapplies state.')
+param accessMutationsLocked bool = false
+
 var containerAppName = 'clientsphere-${suffix}'
 var containerEnvironmentName = 'cae-clientsphere-${suffix}'
 var containerRegistryName = 'acrclientsphere${suffix}'
@@ -49,6 +55,7 @@ var cognitiveOpenAiContributorRole = subscriptionResourceId('Microsoft.Authoriza
 var azureAiDeveloperRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '64702f94-c441-49e6-a78b-ef80e0188fee')
 var acrPullRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
 var acrPushRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
+var containerAppsContributorRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '358470bc-b998-42bd-ab17-a7e34c199c0f')
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logName
@@ -218,6 +225,10 @@ resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
+  tags: union({
+    application: 'ClientSphere'
+    managedBy: 'GitHubActions'
+  }, accessStateTags)
   identity: {
     type: 'SystemAssigned'
   }
@@ -304,6 +315,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'CLIENTSPHERE_AGENT_STATE_B64'
               value: agentStateB64
             }
+            {
+              name: 'CLIENTSPHERE_CONTAINER_APP_RESOURCE_ID'
+              value: resourceId('Microsoft.App/containerApps', containerAppName)
+            }
+            {
+              name: 'CLIENTSPHERE_ACCESS_MUTATIONS_LOCKED'
+              value: string(accessMutationsLocked)
+            }
           ]
           resources: {
             cpu: json('0.5')
@@ -356,6 +375,16 @@ resource appAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: acrPullRole
+  }
+}
+
+resource appSelfManager 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerApp.id, 'self-manager', containerAppsContributorRole)
+  scope: containerApp
+  properties: {
+    principalId: containerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: containerAppsContributorRole
   }
 }
 

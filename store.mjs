@@ -13,6 +13,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { TableClient, TableServiceClient } from "@azure/data-tables";
 import { DefaultAzureCredential } from "@azure/identity";
+import { registrationDisposition } from "./access-governance.mjs";
+import { readPersistedAccessState } from "./access-state.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Keyless: use the storage account name + AAD (managed identity / az login).
@@ -49,18 +51,27 @@ async function initTables() {
 const DATA_DIR = path.join(__dirname, "data");
 const FILE = path.join(DATA_DIR, "store.json");
 let mem = { users: {}, usage: [], logs: [], tokens: {}, settings: {} };
-function fileLoad() { try { mem = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { /* fresh */ } mem.logs = mem.logs || []; mem.tokens = mem.tokens || {}; mem.settings = mem.settings || {}; }
+async function fileLoad() {
+  try { mem = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { /* fresh */ }
+  mem.users = mem.users || {};
+  mem.usage = mem.usage || [];
+  mem.logs = mem.logs || [];
+  mem.tokens = mem.tokens || {};
+  mem.settings = mem.settings || {};
+  const durableUsers = await readPersistedAccessState();
+  if (durableUsers) mem.users = Object.fromEntries(durableUsers.map((user) => [user.login.toLowerCase(), user]));
+}
 function fileSave() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(mem, null, 2)); }
 
 export async function initStore() {
-  if (STORAGE_MODE === "table") { await initTables(); } else { fileLoad(); }
+  if (STORAGE_MODE === "table") { await initTables(); } else { await fileLoad(); }
   console.log(`   Storage: ${STORAGE_MODE === "table" ? "Azure Table Storage" : "local JSON file"}`);
 }
 
 // ---- user (de)serialisation for Tables ----
 const USER_FIELDS = ["name", "avatar", "email", "bio", "company", "location", "blog",
   "followers", "publicRepos", "htmlUrl", "githubCreatedAt", "status", "isAdmin",
-  "requestedAt", "lastLoginAt", "decidedAt", "decidedBy"];
+  "requestedAt", "lastLoginAt", "decidedAt", "decidedBy", "profileHydratedAt"];
 function entToUser(e) {
   const u = { login: e.loginDisplay || e.rowKey };
   for (const f of USER_FIELDS) {
@@ -100,6 +111,7 @@ export async function upsertUser(profile, defaultStatus = "pending") {
     publicRepos: profile.publicRepos ?? (existing?.publicRepos ?? 0),
     htmlUrl: profile.htmlUrl ?? (existing?.htmlUrl ?? `https://github.com/${profile.login}`),
     githubCreatedAt: profile.githubCreatedAt ?? (existing?.githubCreatedAt ?? null),
+    profileHydratedAt: profile.profileHydratedAt ?? (existing?.profileHydratedAt ?? null),
   };
   let user;
   if (existing) {
@@ -111,8 +123,30 @@ export async function upsertUser(profile, defaultStatus = "pending") {
       requestedAt: nowIso(), lastLoginAt: nowIso(), decidedAt: null, decidedBy: null,
     };
   }
+
   await saveUser(user);
   return user;
+}
+
+export async function registerUser(profile, configuredAdminLogins = []) {
+  const existing = await getUser(profile.login);
+  if (existing) {
+    let user = await upsertUser(profile, existing.status);
+    const profileUpdated = ["name", "avatar", "email"].some((field) =>
+      profile[field] !== undefined && profile[field] !== null && profile[field] !== existing[field]);
+    const users = await listUsers();
+    const disposition = registrationDisposition(users, profile.login, configuredAdminLogins);
+    if (!users.some((item) => item.status === "approved" && item.isAdmin) && disposition.isAdmin) {
+      user = await setAdmin(profile.login, true);
+      return { user, isNew: false, bootstrapped: true, profileUpdated };
+    }
+    return { user, isNew: false, bootstrapped: false, profileUpdated };
+  }
+  const users = await listUsers();
+  const disposition = registrationDisposition(users, profile.login, configuredAdminLogins);
+  let user = await upsertUser(profile, disposition.status);
+  if (disposition.isAdmin) user = await setAdmin(user.login, true);
+  return { user, isNew: true, bootstrapped: disposition.bootstrapped, profileUpdated: false };
 }
 
 async function saveUser(user) {
@@ -124,6 +158,7 @@ export async function setStatus(login, status, decidedBy) {
   const u = await getUser(login);
   if (!u) return null;
   u.status = status; u.decidedAt = nowIso(); u.decidedBy = decidedBy || null;
+  if (status !== "approved") u.isAdmin = false;
   await saveUser(u);
   return u;
 }
@@ -148,7 +183,21 @@ export async function listUsers() {
   let users = [];
   if (STORAGE_MODE === "table") { for await (const e of tables.users.listEntities()) users.push(entToUser(e)); }
   else { users = Object.values(mem.users); }
-  return users.sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""));
+  return users
+    .map((user) => structuredClone(user))
+    .sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""));
+}
+
+export async function replaceUsers(users) {
+  if (STORAGE_MODE === "table") {
+    for await (const entity of tables.users.listEntities()) {
+      await tables.users.deleteEntity(entity.partitionKey, entity.rowKey);
+    }
+    for (const user of users) await tables.users.upsertEntity(userToEnt(user), "Replace");
+  } else {
+    mem.users = Object.fromEntries(users.map((user) => [user.login.toLowerCase(), structuredClone(user)]));
+    fileSave();
+  }
 }
 
 // ----------------------------------------------------------------------------

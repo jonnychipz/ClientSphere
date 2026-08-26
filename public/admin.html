@@ -29,6 +29,11 @@
   <main class="admin-main">
     <section class="kpis" id="kpis"></section>
 
+    <section class="governance-note">
+      <strong>Access governance</strong>
+      <span>New users remain blocked until approved. Only approved administrators can open this page. Promote approved users to create backup admins; the final administrator is always protected.</span>
+    </section>
+
     <section class="card">
       <div class="card-head"><h2>Access requests</h2><span class="muted" id="usersMeta"></span></div>
       <div class="table-wrap"><table id="usersTable"><thead><tr>
@@ -58,7 +63,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>System logs</h2><span class="muted" id="logsMeta">stored in Azure Table Storage</span></div>
+      <div class="card-head"><h2>System logs</h2><span class="muted" id="logsMeta">application audit trail</span></div>
       <div class="table-wrap"><table id="logsTable"><thead><tr>
         <th>Time</th><th>Level</th><th>Event</th><th>Detail</th>
       </tr></thead><tbody id="logsBody"></tbody></table></div>

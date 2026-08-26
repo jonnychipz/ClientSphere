@@ -13,17 +13,20 @@ import {
   customers, getCustomer, customerPublicView, loadAgentMetadata,
 } from "./customer-registry.mjs";
 import { buildCustomerUseCases, getCustomerUseCase } from "./use-case-registry.mjs";
+import { resolveCustomerLogo } from "./customer-logo.mjs";
 import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
 import { buildAgentInput } from "./multimodal-input.mjs";
 import {
-  DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
+  DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
 } from "./auth.mjs";
 import {
-  initStore, STORAGE_MODE, getUser, upsertUser, setStatus, setAdmin, deleteUser,
-  listUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken, peekToken,
+  initStore, STORAGE_MODE, getUser, registerUser, setStatus, setAdmin, deleteUser,
+  listUsers, replaceUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken, peekToken,
   getSetting, setSetting,
 } from "./store.mjs";
+import { approvedAdmins, isApprovedAdmin, removalGuard, withAccessRegistryLock } from "./access-governance.mjs";
+import { persistAccessState } from "./access-state.mjs";
 import {
   EMAIL_ENABLED, emailAdminNewUser, emailUserPending, emailUserDecision,
   emailAdminAccountDeleted, emailUserAccountDeleted,
@@ -245,35 +248,136 @@ const appUrlOf = (req) => process.env.PUBLIC_BASE_URL || baseUrl(req);
 
 // Effective admin = bootstrap env admin (e.g. jonnychipz) OR stored isAdmin flag.
 function effectiveAdmin(user) {
-  return !!user && (isAdmin(user.login) || user.isAdmin === true);
+  return isApprovedAdmin(user);
 }
 
-// Resolve the signed-in user (full record). Bootstrap admins are auto-provisioned + approved.
+async function usersWithGovernance() {
+  const users = await listUsers();
+  const admins = approvedAdmins(users);
+  return { users, admins, adminCount: admins.length };
+}
+
+async function persistAccessRegistry() {
+  if (STORAGE_MODE !== "file") return;
+  await persistAccessState(await listUsers());
+}
+
+function accessMutationsLocked() {
+  return process.env.CLIENTSPHERE_ACCESS_MUTATIONS_LOCKED === "true";
+}
+
+function assertAccessMutationsAvailable() {
+  if (!accessMutationsLocked()) return;
+  const error = new Error("Access administration is briefly locked during deployment. Try again in a few minutes.");
+  error.statusCode = 503;
+  throw error;
+}
+
+async function registerIdentity(profile) {
+  return withAccessRegistryLock(async () => {
+    const snapshot = await listUsers();
+    const existing = await getUser(profile.login);
+    if (accessMutationsLocked()) {
+      if (existing) return { user: existing, isNew: false, bootstrapped: false, profileUpdated: false };
+      assertAccessMutationsAvailable();
+    }
+    try {
+      const registration = await registerUser(profile, ADMIN_LOGINS);
+      if (registration.isNew || registration.bootstrapped || registration.profileUpdated) await persistAccessRegistry();
+      return registration;
+    } catch (error) {
+      await replaceUsers(snapshot);
+      throw error;
+    }
+  });
+}
+
+async function publicGitHubProfile(login) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+      headers: { "User-Agent": "ClientSphere", Accept: "application/vnd.github+json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const profile = await response.json();
+    return {
+      login: profile.login,
+      name: profile.name || profile.login,
+      avatar: profile.avatar_url || "",
+      bio: profile.bio || "",
+      company: profile.company || "",
+      location: profile.location || "",
+      blog: profile.blog || "",
+      followers: profile.followers ?? 0,
+      publicRepos: profile.public_repos ?? 0,
+      htmlUrl: profile.html_url || `https://github.com/${profile.login}`,
+      githubCreatedAt: profile.created_at || null,
+      profileHydratedAt: new Date().toISOString(),
+    };
+  } catch {
+    return { login, name: login, profileHydratedAt: new Date().toISOString() };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function mutateAccessRegistry(operation) {
+  return withAccessRegistryLock(async () => {
+    assertAccessMutationsAvailable();
+    const snapshot = await listUsers();
+    try {
+      const result = await operation();
+      await persistAccessRegistry();
+      return result;
+    } catch (error) {
+      await replaceUsers(snapshot);
+      throw error;
+    }
+  });
+}
+
+// Resolve the signed-in user. A configured bootstrap login only recovers a registry with no administrator.
 async function resolveUser(req) {
   const login = sessionLogin(req);
   if (!login) return null;
   let user = await getUser(login);
-  if (!user && isAdmin(login)) user = await upsertUser({ login, name: login }, "approved");
-  if (user && isAdmin(login) && (user.status !== "approved" || !user.isAdmin)) {
-    user.status = "approved"; user.isAdmin = true; await setAdmin(login, true);
+  if (!user) return null;
+  const hydrationAge = user.profileHydratedAt ? Date.now() - Date.parse(user.profileHydratedAt) : Infinity;
+  if (!accessMutationsLocked() && hydrationAge > 24 * 60 * 60 * 1000) {
+    const profile = await publicGitHubProfile(user.login);
+    if (profile) {
+      user = (await registerIdentity(profile)).user;
+    }
   }
   return user;
 }
 function requireApproved(handler) {
   return async (req, res) => {
-    const u = await resolveUser(req);
-    if (!u) return res.status(401).json({ error: "Not signed in" });
-    if (u.status !== "approved") return res.status(403).json({ error: "Access not approved", status: u.status });
-    req.authUser = u;
-    return handler(req, res);
+    try {
+      const u = await resolveUser(req);
+      if (!u) return res.status(401).json({ error: "Not signed in" });
+      if (u.status !== "approved") return res.status(403).json({ error: "Access not approved", status: u.status });
+      req.authUser = u;
+      return await handler(req, res);
+    } catch (error) {
+      console.error("approved route error:", error);
+      return res.status(error.statusCode || 500).json({ error: error.message || "Request failed" });
+    }
   };
 }
 function requireAdmin(handler) {
   return async (req, res) => {
-    const u = await resolveUser(req);
-    if (!effectiveAdmin(u)) return res.status(403).json({ error: "Admin only" });
-    req.authUser = u;
-    return handler(req, res);
+    try {
+      const u = await resolveUser(req);
+      if (!effectiveAdmin(u)) return res.status(403).json({ error: "Approved administrator access required" });
+      req.authUser = u;
+      return await handler(req, res);
+    } catch (error) {
+      console.error("admin route error:", error);
+      return res.status(error.statusCode || 500).json({ error: error.message || "Admin action failed" });
+    }
   };
 }
 
@@ -290,6 +394,18 @@ function actionPage(title, message, ok) {
   <body><div class="c"><h1>${title}</h1><p>${message}</p>
   <p style="margin-top:18px"><a href="/admin">Open the admin dashboard →</a></p></div></body></html>`;
 }
+
+// Prevent the static middleware from exposing the admin document to non-admin users.
+app.get("/admin.html", (req, res) => res.redirect("/admin"));
+app.get("/customer-logos/:customerId", async (req, res) => {
+  const customer = getCustomer(req.params.customerId);
+  if (!customer) return res.status(404).end();
+  const logo = await resolveCustomerLogo(customer);
+  res.setHeader("Content-Type", logo.contentType);
+  res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(logo.body);
+});
 
 // Static assets (css/js/images/backgrounds) are open; the HTML entry + APIs are gated.
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
@@ -321,11 +437,11 @@ app.get("/auth/callback", async (req, res) => {
     if (!checkState(req, state)) return res.status(400).send("Invalid OAuth state. <a href='/login'>Try again</a>.");
     const token = await exchangeCode(code, redirectUri(req));
     const gh = await fetchGitHubUser(token);
-    const isNew = !(await getUser(gh.login));
-    const user = await upsertUser(gh, isAdmin(gh.login) ? "approved" : "pending");
+    const { user, isNew, bootstrapped } = await registerIdentity(gh);
     setSession(res, user.login, req.secure);
     await logUsage(user.login, "login");
     if (isNew && !effectiveAdmin(user)) await startApprovalWorkflow(user, req);
+    if (bootstrapped) await log("info", "First administrator created", `@${user.login}`);
     res.redirect("/");
   } catch (err) {
     console.error("oauth callback error:", err.message);
@@ -344,11 +460,11 @@ app.post("/auth/dev", async (req, res) => {
     const r = await fetch(`https://api.github.com/users/${login}`, { headers: { "User-Agent": "ClientSphere", Accept: "application/vnd.github+json" } });
     if (r.ok) { const g = await r.json(); profile = { login: g.login, name: g.name || g.login, avatar: g.avatar_url, bio: g.bio, company: g.company, location: g.location, blog: g.blog, followers: g.followers, publicRepos: g.public_repos, htmlUrl: g.html_url, githubCreatedAt: g.created_at }; }
   } catch { /* offline ok */ }
-  const isNew = !(await getUser(login));
-  const user = await upsertUser(profile, isAdmin(login) ? "approved" : "pending");
+  const { user, isNew, bootstrapped } = await registerIdentity(profile);
   setSession(res, user.login, req.secure);
   await logUsage(user.login, "login", "dev");
   if (isNew && !effectiveAdmin(user)) await startApprovalWorkflow(user, req);
+  if (bootstrapped) await log("info", "First administrator created", `@${user.login}`);
   res.json({ ok: true, status: effectiveAdmin(user) ? "approved" : user.status });
 });
 
@@ -357,22 +473,37 @@ app.get("/auth/logout", (req, res) => { clearSession(res, req.secure); res.redir
 app.get("/api/authmode", (req, res) => res.json({ devMode: DEV_MODE, oauthConfigured: OAUTH_CONFIGURED }));
 
 app.get("/api/me", async (req, res) => {
-  const u = await resolveUser(req);
-  if (!u) return res.status(401).json({ error: "Not signed in" });
-  const usage = (await usageStats()).find((s) => s.login.toLowerCase() === u.login.toLowerCase()) || { total: 0, chats: 0, lastActive: null };
-  res.json({
-    login: u.login, name: u.name, avatar: u.avatar, email: u.email, status: u.status,
-    isAdmin: effectiveAdmin(u), company: u.company, location: u.location, bio: u.bio,
-    followers: u.followers, publicRepos: u.publicRepos, htmlUrl: u.htmlUrl,
-    requestedAt: u.requestedAt, usage,
-  });
+  try {
+    const u = await resolveUser(req);
+    if (!u) return res.status(401).json({ error: "Not signed in" });
+    const usage = (await usageStats()).find((s) => s.login.toLowerCase() === u.login.toLowerCase()) || { total: 0, chats: 0, lastActive: null };
+    res.json({
+      login: u.login, name: u.name, avatar: u.avatar, email: u.email, status: u.status,
+      isAdmin: effectiveAdmin(u), company: u.company, location: u.location, bio: u.bio,
+      followers: u.followers, publicRepos: u.publicRepos, htmlUrl: u.htmlUrl,
+      requestedAt: u.requestedAt, usage,
+    });
+  } catch (error) {
+    console.error("profile route error:", error);
+    res.status(error.statusCode || 500).json({ error: error.message || "Could not load profile" });
+  }
 });
 
 // Self-service: delete my own account (notifies the admin).
 app.post("/api/me/delete", requireApproved(async (req, res) => {
   const u = req.authUser;
-  if (isAdmin(u.login)) return res.status(400).json({ error: "Bootstrap admin cannot self-delete" });
-  await deleteUser(u.login);
+  await mutateAccessRegistry(async () => {
+    if (effectiveAdmin(u)) {
+      const governance = await usersWithGovernance();
+      const guard = removalGuard(governance.users, u.login);
+      if (!guard.allowed) {
+        const error = new Error(guard.reason);
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+    await deleteUser(u.login);
+  });
   await logUsage(u.login, "account-deleted", "self");
   await log("warn", "Account self-deleted", `@${u.login} (${u.email || "no email"})`);
   // Notify the admin, and confirm to the user that their account + data were removed.
@@ -384,25 +515,43 @@ app.post("/api/me/delete", requireApproved(async (req, res) => {
 
 // ---- gated pages ----
 app.get("/", async (req, res) => {
-  const u = await resolveUser(req);
-  if (!u) return res.redirect("/login");
-  if (u.status === "denied") return res.redirect("/denied");
-  if (u.status !== "approved" && !effectiveAdmin(u)) return res.redirect("/pending");
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  try {
+    const u = await resolveUser(req);
+    if (!u) return res.redirect("/login");
+    if (u.status === "denied") return res.redirect("/denied");
+    if (u.status !== "approved" && !effectiveAdmin(u)) return res.redirect("/pending");
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+  } catch (error) {
+    console.error("home route error:", error);
+    res.status(503).send("ClientSphere is temporarily unavailable. Please retry shortly.");
+  }
 });
 for (const p of PUBLIC_PAGES) {
   app.get(p, (req, res) => res.sendFile(path.join(__dirname, "public", p.slice(1) + ".html")));
 }
 app.get("/admin", async (req, res) => {
-  const u = await resolveUser(req);
-  if (!effectiveAdmin(u)) return res.redirect("/login");
-  res.sendFile(path.join(__dirname, "public", "admin.html"));
+  try {
+    const u = await resolveUser(req);
+    if (!u) return res.redirect("/login");
+    if (!effectiveAdmin(u)) return res.redirect(u.status === "pending" ? "/pending" : "/");
+    res.sendFile(path.join(__dirname, "public", "admin.html"));
+  } catch (error) {
+    console.error("admin page error:", error);
+    res.status(503).send("Administration is temporarily unavailable. Please retry shortly.");
+  }
 });
 
 // ---- admin APIs ----
 app.get("/api/admin/users", requireAdmin(async (req, res) => {
-  const users = (await listUsers()).map((u) => ({ ...u, effectiveAdmin: effectiveAdmin(u), bootstrapAdmin: isAdmin(u.login) }));
-  res.json({ users, admins: ADMIN_LOGINS });
+  const governance = await usersWithGovernance();
+  const users = governance.users.map((u) => ({
+    ...u,
+    effectiveAdmin: effectiveAdmin(u),
+    soleAdmin: effectiveAdmin(u) && governance.adminCount === 1,
+    currentUser: u.login.toLowerCase() === req.authUser.login.toLowerCase(),
+    canPromote: u.status === "approved" && !effectiveAdmin(u),
+  }));
+  res.json({ users, adminCount: governance.adminCount, currentLogin: req.authUser.login });
 }));
 app.get("/api/admin/usage", requireAdmin(async (req, res) => res.json({ recent: await getUsage(150), stats: await usageStats() })));
 app.get("/api/admin/logs", requireAdmin(async (req, res) => res.json({ logs: await getLogs(300) })));
@@ -410,9 +559,24 @@ app.get("/api/admin/logs", requireAdmin(async (req, res) => res.json({ logs: awa
 app.post("/api/admin/decide", requireAdmin(async (req, res) => {
   const { login, decision } = req.body || {};
   if (!["approved", "denied", "pending"].includes(decision)) return res.status(400).json({ error: "bad decision" });
-  if (isAdmin(login)) return res.status(400).json({ error: "Cannot change a bootstrap admin's access" });
-  const u = await setStatus(login, decision, req.authUser.login);
-  if (!u) return res.status(404).json({ error: "user not found" });
+  const u = await mutateAccessRegistry(async () => {
+    const governance = await usersWithGovernance();
+    const target = governance.users.find((user) => user.login.toLowerCase() === String(login).toLowerCase());
+    if (!target) {
+      const error = new Error("User not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    if (decision !== "approved" && effectiveAdmin(target)) {
+      const guard = removalGuard(governance.users, login);
+      if (!guard.allowed) {
+        const error = new Error(guard.reason);
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+    return setStatus(login, decision, req.authUser.login);
+  });
   await logUsage(req.authUser.login, "decide", `${login} -> ${decision}`);
   await log("info", `Access ${decision}`, `@${login} by @${req.authUser.login}`);
   if (decision === "approved" || decision === "denied") emailUserDecision(u, decision, appUrlOf(req)).catch((e) => console.error("decision email:", e.message));
@@ -421,27 +585,62 @@ app.post("/api/admin/decide", requireAdmin(async (req, res) => {
 
 app.post("/api/admin/delete", requireAdmin(async (req, res) => {
   const { login } = req.body || {};
-  if (isAdmin(login)) return res.status(400).json({ error: "Cannot delete a bootstrap admin" });
-  // Read the record BEFORE deleting so we can notify the user afterwards.
-  const target = await getUser(login);
-  const ok = await deleteUser(login);
-  if (!ok) return res.status(404).json({ error: "user not found" });
+  const target = await mutateAccessRegistry(async () => {
+    const governance = await usersWithGovernance();
+    const guard = removalGuard(governance.users, login);
+    if (!guard.allowed) {
+      const error = new Error(guard.reason);
+      error.statusCode = guard.reason === "User not found." ? 404 : 409;
+      throw error;
+    }
+    const targetUser = guard.target;
+    const ok = await deleteUser(login);
+    if (!ok) {
+      const error = new Error("User not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    return targetUser;
+  });
   await log("warn", "Account deleted by admin", `@${login} by @${req.authUser.login}`);
   // Email both the affected user (their access was removed) and the admin mailbox (record).
   if (target) {
     emailUserAccountDeleted(target, appUrlOf(req), "admin").catch((e) => console.error("user delete email:", e.message));
     emailAdminAccountDeleted(target, appUrlOf(req), "admin", req.authUser.login).catch((e) => console.error("admin delete email:", e.message));
   }
-  res.json({ ok: true });
+  const selfDeleted = login.toLowerCase() === req.authUser.login.toLowerCase();
+  if (selfDeleted) clearSession(res, req.secure);
+  res.json({ ok: true, selfDeleted });
 }));
 
 app.post("/api/admin/set-admin", requireAdmin(async (req, res) => {
   const { login, makeAdmin } = req.body || {};
-  if (isAdmin(login)) return res.status(400).json({ error: "That account is a permanent bootstrap admin" });
-  const u = await setAdmin(login, !!makeAdmin);
-  if (!u) return res.status(404).json({ error: "user not found" });
+  const u = await mutateAccessRegistry(async () => {
+    const governance = await usersWithGovernance();
+    const target = governance.users.find((user) => user.login.toLowerCase() === String(login).toLowerCase());
+    if (!target) {
+      const error = new Error("User not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    if (makeAdmin && target.status !== "approved") {
+      const error = new Error("Approve the user before promoting them to administrator.");
+      error.statusCode = 409;
+      throw error;
+    }
+    if (!makeAdmin && effectiveAdmin(target)) {
+      const guard = removalGuard(governance.users, login);
+      if (!guard.allowed) {
+        const error = new Error(guard.reason);
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+    return setAdmin(login, !!makeAdmin);
+  });
   await log("info", makeAdmin ? "Promoted to admin" : "Admin removed", `@${login} by @${req.authUser.login}`);
-  res.json({ ok: true, user: { ...u, effectiveAdmin: effectiveAdmin(u) } });
+  const selfDemoted = !makeAdmin && login.toLowerCase() === req.authUser.login.toLowerCase();
+  res.json({ ok: true, selfDemoted, user: { ...u, effectiveAdmin: effectiveAdmin(u) } });
 }));
 
 // ----- One-click Approve/Deny from the admin's email -----
@@ -497,14 +696,35 @@ app.post("/admin/action", async (req, res) => {
   const decision = d === "approved" ? "approved" : d === "denied" ? "denied" : null;
   const fail = (msg) => res.status(400).send(actionPage("Link problem", msg, false));
   if (!decision) return fail("That request is missing a valid decision.");
+  if (accessMutationsLocked()) return res.status(503).send(actionPage("Deployment in progress", "Access decisions are briefly locked. Try this link again in a few minutes.", false));
   // Consume the single-use token; it must match the decision and be unused.
   const consumed = await consumeToken(token, decision);
   if (!consumed) return fail("This link is invalid, already used, or expired. Use the admin dashboard instead.");
   const login = consumed.login;
-  if (isAdmin(login)) return fail("That account is an admin and can't be changed.");
-  const u = await getUser(login);
-  if (!u) return fail("That user no longer exists.");
-  await setStatus(login, decision, "email-link");
+  let u;
+  try {
+    u = await mutateAccessRegistry(async () => {
+      const target = await getUser(login);
+      if (!target) {
+        const error = new Error("That user no longer exists.");
+        error.statusCode = 404;
+        throw error;
+      }
+      if (effectiveAdmin(target)) {
+        const governance = await usersWithGovernance();
+        const guard = removalGuard(governance.users, login);
+        if (!guard.allowed) {
+          const error = new Error(guard.reason);
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+      await setStatus(login, decision, "email-link");
+      return target;
+    });
+  } catch (error) {
+    return fail(error.message);
+  }
   await logUsage("email-link", "decide", `${login} -> ${decision}`);
   await log("info", `Access ${decision} (email link)`, `@${login}`);
   emailUserDecision(u, decision, appUrlOf(req)).catch((e) => console.error("decision email:", e.message));

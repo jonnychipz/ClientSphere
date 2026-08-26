@@ -114,6 +114,7 @@ export async function fetchGitHubUser(token) {
     publicRepos: u.public_repos ?? 0,
     htmlUrl: u.html_url || `https://github.com/${u.login}`,
     githubCreatedAt: u.created_at || null,
+    profileHydratedAt: new Date().toISOString(),
   };
 }
 

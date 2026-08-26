@@ -46,7 +46,7 @@ Every push to `main`:
 5. Refreshes public customer research and Foundry agents when their definitions changed or metadata is absent.
 6. Compresses agent state into the Container App management-plane configuration and embeds full metadata in the image.
 7. Builds the image in Azure Container Registry and deploys it to Azure Container Apps Consumption.
-8. Verifies `/healthz` reports all 42 customer agents.
+8. Verifies `/healthz` reports all 40 customers and 160 customer agent modes.
 
 The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, then builds and deploys a refreshed image.
 

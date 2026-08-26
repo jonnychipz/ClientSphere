@@ -17,7 +17,7 @@ test("source allowlist rejects unrelated and suffix-confusion domains", () => {
 });
 
 test("private network addresses are blocked", () => {
-  for (const address of ["127.0.0.1", "10.0.0.2", "169.254.169.254", "192.168.1.1", "::1", "fd00::1"]) {
+  for (const address of ["127.0.0.1", "10.0.0.2", "169.254.169.254", "192.168.1.1", "::1", "fd00::1", "::ffff:169.254.169.254", "::ffff:172.16.0.1", "::ffff:a9fe:a9fe", "::ffff:7f00:1", "::ffff:c0a8:101"]) {
     assert.equal(isPrivateAddress(address), true, address);
   }
   assert.equal(isPrivateAddress("8.8.8.8"), false);

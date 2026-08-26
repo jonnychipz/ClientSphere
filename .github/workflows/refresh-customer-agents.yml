@@ -6,73 +6,18 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
-  id-token: write
-
-concurrency:
-  group: clientsphere-production
-  cancel-in-progress: false
 
 jobs:
-  refresh:
+  dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    environment: production
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          cache: npm
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - run: npm ci
-
-      - name: Load infrastructure outputs
-        shell: bash
+      - name: Dispatch governed production refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          outputs=$(az deployment group show \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name clientsphere-main \
-            --query properties.outputs -o json)
-          echo "PROJECT_ENDPOINT=$(jq -r '.projectEndpoint.value' <<< "$outputs")" >> "$GITHUB_ENV"
-          echo "CONTAINER_APP_NAME=$(jq -r '.containerAppName.value' <<< "$outputs")" >> "$GITHUB_ENV"
-          echo "REGISTRY_NAME=$(jq -r '.containerRegistryName.value' <<< "$outputs")" >> "$GITHUB_ENV"
-          echo "REGISTRY_SERVER=$(jq -r '.containerRegistryServer.value' <<< "$outputs")" >> "$GITHUB_ENV"
-
-          state=$(az containerapp show \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$(jq -r '.containerAppName.value' <<< "$outputs")" \
-            --query "properties.template.containers[0].env[?name=='CLIENTSPHERE_AGENT_STATE_B64'].value | [0]" \
-            -o tsv)
-          if [[ -n "$state" ]]; then
-            printf '%s' "$state" | base64 --decode | gzip --decompress > customer-agents.json
-          fi
-
-      - run: npm run customers:refresh
-      - run: npm run agents:provision
-
-      - name: Build refreshed application container
-        run: |
-          az config set extension.use_dynamic_install=yes_without_prompt
-          az acr build \
-            --registry "$REGISTRY_NAME" \
-            --image "clientsphere:${{ github.sha }}-refresh-${{ github.run_number }}" \
-            --file Dockerfile .
-
-      - name: Deploy refreshed metadata and image
-        shell: bash
-        run: |
-          state=$(gzip --stdout customer-agents.json | base64 --wrap=0)
-          az containerapp update \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$CONTAINER_APP_NAME" \
-            --image "$REGISTRY_SERVER/clientsphere:${{ github.sha }}-refresh-${{ github.run_number }}" \
-            --set-env-vars CLIENTSPHERE_AGENT_STATE_B64="$state" \
-            --output none
+          gh workflow run deploy.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f refresh_customer_agents=true

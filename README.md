@@ -1,12 +1,12 @@
 # ClientSphere
 
-ClientSphere is a customer-specific public-intelligence and meeting-coaching application built on Azure AI Foundry. It preserves Hubble's proven two-pane voice/avatar experience while replacing the GitHub-only knowledge domain with 42 isolated customer agents sourced from the `SME&C Accounts` Edge favourites.
+ClientSphere is a customer-specific public-intelligence and meeting-coaching application built on Azure AI Foundry. It preserves Hubble's proven two-pane voice/avatar experience while replacing the GitHub-only knowledge domain with 40 isolated customer agents sourced from the `SME&C Accounts` Edge favourites.
 
 ## Capabilities
 
 - Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
 - Four deterministic Foundry modes per customer: one concise general adviser plus three industry-tailored synthetic use-case agents, all sharing that customer's isolated vector store.
-- 126 synthetic demo agents covering image-first, operational reasoning, and business-value scenario workflows.
+- 120 synthetic demo agents covering image-first, operational reasoning, and business-value scenario workflows.
 - Three click-through scenes per synthetic agent: Live signal, Agent at work, and Value realised, each carrying realistic customer-labelled synthetic records.
 - Brief + Voice mode for fast avatar conversation and Structured mode for screen-shared workflow, evidence, controls, KPI, and proof-of-value artefacts.
 - GPT-5.6 Sol, Luna, and Terra model deployments with bounded PNG/JPEG/WebP input for multimodal demonstrations.
@@ -16,12 +16,12 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 - Evidence-led executive brief, roleplay and scorecard, session recap, citations, and public links.
 - Azure Speech real-time avatars, speech-to-text, barge-in, scenes, and the complete Hubble built-in voice catalogue.
 - Optional custom Jonnychipz avatar/voice wiring, disabled until assets become available.
-- GitHub OAuth access approval, audit/usage data, and an admin dashboard.
+- GitHub OAuth access approval, an encrypted durable administrator registry, sole-admin protection, audit/usage data, and an approved-admin-only dashboard.
 - Bicep infrastructure and GitHub Actions deployment using secretless OIDC.
 
 ## Customer set
 
-`config/customers.json` contains the 42 official sites captured from the Edge favourites folder. Generated website research is written to `knowledge/customers/` and deliberately ignored by Git because it is refreshed by GitHub Actions.
+`config/customers.json` contains the 40 active official customer sites. Generated website research is written to `knowledge/customers/` and deliberately ignored by Git because it is refreshed by GitHub Actions.
 
 ## Architecture
 

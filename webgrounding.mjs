@@ -59,10 +59,19 @@ export function isPrivateAddress(address) {
   }
   if (net.isIPv6(address)) {
     const value = address.toLowerCase();
+    if (value.startsWith("::ffff:")) {
+      const mapped = value.slice(7);
+      if (net.isIPv4(mapped)) return isPrivateAddress(mapped);
+      const groups = mapped.split(":");
+      if (groups.length === 2 && groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) {
+        const high = Number.parseInt(groups[0], 16);
+        const low = Number.parseInt(groups[1], 16);
+        return isPrivateAddress(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+      }
+    }
     return value === "::1" || value === "::" || value.startsWith("fc") ||
       value.startsWith("fd") || value.startsWith("fe8") || value.startsWith("fe9") ||
-      value.startsWith("fea") || value.startsWith("feb") || value.startsWith("::ffff:127.") ||
-      value.startsWith("::ffff:10.") || value.startsWith("::ffff:192.168.");
+      value.startsWith("fea") || value.startsWith("feb");
   }
   return true;
 }

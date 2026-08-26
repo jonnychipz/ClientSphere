@@ -125,9 +125,9 @@ body {
   background: oklch(0.96 0.01 292);
   border: 1px solid var(--border);
 }
-.customer-logo-shell { width: 42px; height: 42px; border-radius: 10px; }
+.customer-logo-shell { width: 48px; height: 48px; border-radius: 11px; box-shadow: 0 3px 12px oklch(0.08 0.02 292 / 0.28); }
 .customer-logo-shell img,
-.customer-option-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.customer-option-logo img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
 .customer-initials,
 .customer-option-logo span { font-weight: 700; font-size: 12px; color: oklch(0.3 0.08 292); }
 .customer-trigger-copy {
@@ -223,14 +223,20 @@ body {
   cursor: pointer;
 }
 .customer-option:hover { background: var(--panel-2); border-color: var(--border); }
+.customer-option:disabled { opacity: 0.55; cursor: wait; }
+.customer-options[aria-busy="true"] { cursor: wait; }
 .customer-option[aria-selected="true"] {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
-.customer-option-logo { width: 38px; height: 38px; border-radius: 9px; }
+.customer-option-logo { width: 42px; height: 42px; border-radius: 9px; box-shadow: 0 2px 8px oklch(0.08 0.02 292 / 0.2); }
 .customer-option-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .customer-option-copy strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .customer-option-copy span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.customer-required .customer-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 35%, transparent);
+}
 
 /* Profile dropdown — pushed to the right of the header */
 .profile { position: relative; flex: 0 0 auto; margin-left: auto; }
