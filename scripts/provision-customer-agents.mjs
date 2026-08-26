@@ -49,11 +49,18 @@ async function uploadProfile(customer) {
 
 async function upsertAgent({ customerId, name, description, instructions, fileIds, previousStoreId }) {
   const storeName = `clientsphere-${customerId}-kb`;
-  const store = await agents.vectorStores.createAndPoll({
+  let store = await agents.vectorStores.create({
     fileIds,
     name: storeName,
     metadata: { clientsphereCustomerId: customerId, clientsphereManaged: "true" },
   });
+  for (let attempt = 0; store.status === "in_progress" && attempt < 120; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    store = await agents.vectorStores.get(store.id);
+  }
+  if (store.status !== "completed" || store.fileCounts.failed > 0) {
+    throw new Error(`Vector store '${storeName}' did not complete: ${store.status}, ${store.fileCounts.failed} failed files.`);
+  }
   const fileSearch = ToolUtility.createFileSearchTool([store.id]);
   const webTool = ToolUtility.createFunctionTool(FETCH_DOC_TOOL);
   const options = {
