@@ -10,7 +10,7 @@ Microsoft sellers and technical presenters use ClientSphere before and during cu
 
 ## Product Purpose
 
-ClientSphere turns a portfolio of public customer information into a focused conversational briefing experience. Success means the presenter can switch customers in seconds, see the correct identity and discussion menu, ask broad or detailed questions, rehearse a meeting, and trace material claims to current public sources.
+ClientSphere turns a portfolio of public customer information into a focused conversational briefing and demonstration experience. Success means the presenter can switch customers in seconds, use a concise general adviser, move into three clearly tailored synthetic agent workflows, add an image where relevant, rehearse a meeting, and trace material claims to current public sources.
 
 ## Brand Personality
 
@@ -31,6 +31,7 @@ Credible, composed, and incisive. The product should feel like a prepared accoun
 3. Preserve conversational focus: answer first, expand on demand.
 4. Let customer context shape the experience without weakening a consistent product shell.
 5. Treat customer isolation, source provenance, and safe retrieval as product features.
+6. Make the general adviser and three synthetic use-case agents unmistakably different but effortless to switch.
 
 ## Accessibility & Inclusion
 

@@ -119,6 +119,18 @@
         <button type="button" class="tool-btn" id="aboutBtn" title="About ClientSphere">About</button>
       </div>
 
+      <section class="agent-switcher" aria-labelledby="agentSwitcherTitle">
+        <div class="agent-switcher-head">
+          <div>
+            <strong id="agentSwitcherTitle">Agent mode</strong>
+            <span>General adviser + 3 synthetic demos</span>
+          </div>
+          <span class="agent-mode-badge" id="agentModeBadge">General</span>
+        </div>
+        <div class="agent-mode-grid" id="agentModeGrid" role="tablist" aria-label="Customer agents"></div>
+        <div class="agent-mode-detail" id="agentModeDetail"></div>
+      </section>
+
       <div class="roleplay-banner" id="roleplayBanner" hidden>
         <span class="rp-dot"></span>
         <span id="roleplayLabel">Roleplay in progress</span>
@@ -133,7 +145,14 @@
         </div>
       </div>
 
+      <div class="attachment-preview" id="attachmentPreview" hidden>
+        <img id="attachmentThumb" alt="Selected image preview" />
+        <span id="attachmentName"></span>
+        <button type="button" id="attachmentRemove" aria-label="Remove selected image">Remove</button>
+      </div>
       <form class="composer" id="composer">
+        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        <button type="button" class="attach" id="attachBtn" title="Attach an image for a multimodal demo" aria-label="Attach image"></button>
         <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled></button>
         <button type="button" class="stop" id="stopBtn" title="Stop the adviser speaking" hidden>Stop</button>
         <textarea id="input" rows="1" placeholder="Ask about the active customer..."></textarea>

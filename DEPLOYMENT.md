@@ -23,7 +23,9 @@ The `infra/main.bicep` deployment creates:
 | Resource group | `rg-clientsphere-95bc` |
 | Azure AI Services / Foundry | `clientsphere-ai-95bc` |
 | Foundry project | `clientsphere-project` |
-| GPT deployment | `gpt-5.4` |
+| General/Sol model | `gpt-5.6-sol` (`2026-07-09`) |
+| Multimodal/Luna model | `gpt-5.6-luna` (`2026-07-09`) |
+| Reasoning/Terra model | `gpt-5.6-terra` (`2026-07-09`) |
 | Container App | `clientsphere-95bc` |
 | Container Apps environment | `cae-clientsphere-95bc` |
 | Azure Container Registry | `acrclientsphere95bc` |

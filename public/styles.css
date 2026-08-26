@@ -586,6 +586,98 @@ select {
   flex-direction: column;
   overflow: hidden;
 }
+.agent-switcher {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: oklch(0.185 0.025 292);
+}
+.agent-switcher-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+.agent-switcher-head > div { display: flex; flex-direction: column; gap: 1px; }
+.agent-switcher-head strong { font-size: 13px; }
+.agent-switcher-head span { color: var(--muted); font-size: 11px; }
+.agent-mode-badge {
+  padding: 4px 8px;
+  color: var(--text) !important;
+  background: var(--accent-soft);
+  border: 1px solid var(--menu-border);
+  border-radius: 999px;
+  font-weight: 600;
+}
+.agent-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.agent-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+  color: var(--muted);
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: 180ms ease;
+}
+.agent-mode-card:hover { color: var(--text); border-color: var(--accent); }
+.agent-mode-card[aria-selected="true"] {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.agent-mode-card .mode-top { display: flex; align-items: center; gap: 5px; width: 100%; }
+.agent-mode-card .mode-icon { display: inline-flex; color: var(--accent-2); }
+.agent-mode-card strong {
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+}
+.agent-mode-card small { overflow: hidden; width: 100%; font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-mode-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.agent-detail-copy { min-width: 0; flex: 1; }
+.agent-detail-copy p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.agent-detail-meta { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.agent-detail-meta span {
+  padding: 3px 7px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 9.5px;
+}
+.agent-demo-prompts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.agent-demo-prompts button {
+  padding: 5px 8px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--menu-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.agent-demo-prompts button:hover { border-color: var(--accent); }
+.agent-workflow { flex: 0 0 170px; color: var(--muted); font-size: 10.5px; }
+.agent-workflow summary { color: var(--text); cursor: pointer; font-weight: 600; }
+.agent-workflow ol { margin: 7px 0 0; padding-left: 18px; line-height: 1.45; }
 .messages { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }
@@ -635,6 +727,21 @@ select {
   border-top: 1px solid var(--border);
   background: #10141b;
 }
+.attachment-preview {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  background: oklch(0.2 0.03 292);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.attachment-preview[hidden] { display: none; }
+.attachment-preview img { width: 38px; height: 38px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.attachment-preview span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-preview button { color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.attachment-preview button:hover { color: var(--text); }
 .composer textarea {
   flex: 1;
   resize: none;
@@ -649,12 +756,14 @@ select {
   line-height: 1.4;
 }
 .composer textarea:focus { outline: none; border-color: var(--accent); }
-.mic, .send {
+.attach, .mic, .send {
   width: 46px; height: 46px; flex: 0 0 auto;
   border-radius: 12px; border: 1px solid var(--border);
   background: var(--panel-2); color: var(--text);
   font-size: 18px; cursor: pointer; transition: 0.15s;
 }
+.attach.active { color: var(--accent-2); border-color: var(--accent); }
+.attach:disabled { opacity: 0.35; cursor: not-allowed; }
 .send { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 0; color: #fff; }
 .stop {
   flex: 0 0 auto;
@@ -716,6 +825,7 @@ select {
 .chip,
 .drawer-toggle,
 .user-chip a,
+.attach,
 .mic,
 select,
 .composer textarea {
@@ -728,6 +838,7 @@ select,
 .chip:hover,
 .drawer-toggle:hover,
 .user-chip a:hover,
+.attach:hover,
 .mic:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(139,92,246,0.35), 0 0 18px -2px var(--glow);
@@ -818,7 +929,7 @@ select:focus, .composer textarea:focus {
 .ic { stroke: currentColor; flex: 0 0 auto; }
 .tool-btn, .drawer-link, .mic, .send, .stop, .drawer-toggle, .roleplay-banner button { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
 /* icons render in purple regardless of button text colour */
-.tool-btn .ic, .drawer-toggle .ic, .mic .ic, .stop .ic, .dl-ico .ic { color: var(--accent-2); }
+.tool-btn .ic, .drawer-toggle .ic, .attach .ic, .mic .ic, .stop .ic, .dl-ico .ic { color: var(--accent-2); }
 .tool-btn:hover .ic, .drawer-toggle:hover .ic { color: #c4b5fd; }
 .dl-ico { display: inline-flex; color: var(--accent-2); }
 /* primary gradient buttons keep a white glyph for contrast */
@@ -870,6 +981,9 @@ select { color: var(--text); }
   .customer-trigger { min-height: 56px; }
   .customer-popover { max-height: calc(100vh - 16px); }
   .controls { padding: 10px; gap: 10px; }
+  .agent-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-mode-detail { flex-direction: column; }
+  .agent-workflow { flex-basis: auto; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

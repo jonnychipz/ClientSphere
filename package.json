@@ -11,7 +11,7 @@
     "customers:refresh": "node scripts/refresh-customer-content.mjs",
     "agents:provision": "node scripts/provision-customer-agents.mjs",
     "setup": "npm run customers:refresh && npm run agents:provision",
-    "check": "node --check server.mjs && node --check auth.mjs && node --check store.mjs && node --check webgrounding.mjs && node --check thread-token.mjs && node --check scripts/refresh-customer-content.mjs && node --check scripts/provision-customer-agents.mjs && node --check public/app.js && node --check public/admin.js",
+    "check": "node --check server.mjs && node --check auth.mjs && node --check store.mjs && node --check webgrounding.mjs && node --check thread-token.mjs && node --check use-case-registry.mjs && node --check multimodal-input.mjs && node --check scripts/refresh-customer-content.mjs && node --check scripts/provision-customer-agents.mjs && node --check public/app.js && node --check public/admin.js",
     "test": "node --test",
     "start": "node server.mjs",
     "dev": "node --watch server.mjs"

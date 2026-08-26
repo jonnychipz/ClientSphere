@@ -5,7 +5,9 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 ## Capabilities
 
 - Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
-- One deterministic Foundry agent and vector store per customer, plus a generic portfolio guide.
+- Four deterministic Foundry modes per customer: one concise general adviser plus three industry-tailored synthetic use-case agents, all sharing that customer's isolated vector store.
+- 126 synthetic demo agents covering image-first, operational reasoning, and business-value scenario workflows.
+- GPT-5.6 Sol, Luna, and Terra model deployments with bounded PNG/JPEG/WebP input for multimodal demonstrations.
 - Customer-owned conversation tokens that prevent conversations being reused across customer agents.
 - Public-source research over official customer websites, refreshed weekly with retrieval notes and timestamps.
 - Guarded live web grounding restricted to the active customer's official domain and approved public registries.
@@ -24,8 +26,8 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 ```text
 Browser
   |-- customer selector ------> GET /api/customers/:id
-  |-- customer chat ----------> POST /api/chat { customerId, threadId, message }
-  |                               |-- customer-specific Foundry agent
+  |-- customer chat ----------> POST /api/chat { customerId, agentMode, threadId, message, attachments? }
+  |                               |-- general or synthetic customer Foundry agent
   |                               |-- isolated file-search vector store
   |                               `-- guarded fetch_public_source function tool
   |-- avatar + speech --------> keyless Azure Speech token and relay endpoints
@@ -34,7 +36,7 @@ Browser
 Azure Container Apps managed identity
   |-- Azure AI Foundry / GPT-5.4
   |-- Azure Speech avatar and STT
-  |-- agent metadata embedded in the deployed image
+  |-- four-mode agent metadata embedded in the deployed image
   |-- single-replica local user, usage, log, setting, and token store
   `-- Key Vault and Container App session secret
 ```

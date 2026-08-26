@@ -26,6 +26,19 @@ const ICON_PATHS = {
   lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>',
   rss: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  scan: '<path d="M3 7V4a1 1 0 0 1 1-1h3"/><path d="M17 3h3a1 1 0 0 1 1 1v3"/><path d="M21 17v3a1 1 0 0 1-1 1h-3"/><path d="M7 21H4a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21h-4v-.08a1.7 1.7 0 0 0-1.1-1.52 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3h4v.08A1.7 1.7 0 0 0 15.5 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.37.7.6 1 .28.36.43.8.4 1.25V13c.03.45-.12.89-.4 1.25-.23.3-.44.63-.6 1z"/>',
+  route: '<circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M8.5 17.5 16 7"/><path d="M9 5h3a4 4 0 0 1 4 4v0"/>',
+  radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="m12 12 6-6"/><circle cx="15" cy="9" r="1" fill="currentColor"/>',
+  activity: '<polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><polygon points="16 8 14 14 8 16 10 10 16 8"/>',
+  leaf: '<path d="M20 4c-8 0-14 4-14 10a6 6 0 0 0 6 6c6 0 8-8 8-16z"/><path d="M6 20c2-5 6-8 12-12"/>',
+  checklist: '<path d="m4 6 2 2 4-4"/><path d="M12 6h8"/><path d="m4 13 2 2 4-4"/><path d="M12 13h8"/><path d="m4 20 2 2 4-4"/><path d="M12 20h8"/>',
+  sparkles: '<path d="m12 3-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3z"/><path d="m18 13-1 2-2 1 2 1 1 2 1-2 2-1-2-1-1-2z"/><path d="m6 14-1 2-2 1 2 1 1 2 1-2 2-1-2-1-1-2z"/>',
+  chart: '<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19V3"/><path d="M2 19h22"/>',
+  megaphone: '<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.4 13 22H8l-1.2-7.2"/><path d="M21 9v6"/>',
+  heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/>',
+  paperclip: '<path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.6-9.6a4 4 0 0 1 5.7 5.7l-9.6 9.6a2 2 0 1 1-2.8-2.8l8.9-8.9"/>',
 };
 function icon(name, size = 18) {
   const p = ICON_PATHS[name] || ICON_PATHS.link;
@@ -73,6 +86,15 @@ const els = {
   customerInitials: document.getElementById("customerInitials"),
   customerName: document.getElementById("customerName"),
   customerSector: document.getElementById("customerSector"),
+  agentModeGrid: document.getElementById("agentModeGrid"),
+  agentModeDetail: document.getElementById("agentModeDetail"),
+  agentModeBadge: document.getElementById("agentModeBadge"),
+  attachBtn: document.getElementById("attachBtn"),
+  imageInput: document.getElementById("imageInput"),
+  attachmentPreview: document.getElementById("attachmentPreview"),
+  attachmentThumb: document.getElementById("attachmentThumb"),
+  attachmentName: document.getElementById("attachmentName"),
+  attachmentRemove: document.getElementById("attachmentRemove"),
   avatarIdleCopy: document.getElementById("avatarIdleCopy"),
   welcomeBubble: document.getElementById("welcomeBubble"),
   drawerTitle: document.getElementById("drawerTitle"),
@@ -83,6 +105,10 @@ const state = {
   cfg: null,
   customer: null,
   resources: [],
+  agentMode: "general",
+  attachment: null,
+  attachmentGeneration: 0,
+  fileReader: null,
   threadId: null,
   gender: "female",
   voice: null,
@@ -182,9 +208,14 @@ async function sendMessage(text) {
   if (!text) return;
   // Detect "I'm wrapping up" intent so we don't reopen the mic after the reply.
   state.endCall = isEndingIntent(text);
+  const attachment = state.attachment;
   els.input.value = "";
   els.input.style.height = "auto";
-  dispatch(text, { userText: text });
+  clearAttachment();
+  dispatch(text, {
+    userText: attachment ? `${text}\nAttached image: ${attachment.name}` : text,
+    attachment,
+  });
 }
 
 // Unified entry point. opts:
@@ -226,6 +257,8 @@ async function runChat(prompt, opts = {}) {
         message: prompt,
         threadId: state.threadId,
         customerId: state.customer?.id,
+        agentMode: state.agentMode,
+        attachments: opts.attachment ? [opts.attachment] : [],
       }),
     });
     const data = await res.json();
@@ -268,7 +301,8 @@ async function runChat(prompt, opts = {}) {
 function kickoffGreeting() {
   if (state.greeted) return;
   state.greeted = true;
-  dispatch(`[SYSTEM: The user just turned on voice mode for ${state.customer.name}. Greet them in one or two short sentences, identify yourself as the ${state.customer.name} public-intelligence adviser, and ask what they are preparing for.]`, {});
+  const mode = currentModeDefinition();
+  dispatch(`[SYSTEM: The user just turned on voice mode for ${state.customer.name}. Greet them in one or two short sentences, identify yourself as the ${mode.name}, and ask what they want to discuss or demonstrate.]`, {});
 }
 
 // Strip citation markers / markdown so the avatar speaks naturally
@@ -658,6 +692,50 @@ function showBgPicker(show) {
   els.bgPicker.hidden = !show;
 }
 
+// ---------- multimodal attachment ----------
+function clearAttachment() {
+  state.attachmentGeneration += 1;
+  if (state.fileReader?.readyState === FileReader.LOADING) state.fileReader.abort();
+  state.fileReader = null;
+  state.attachment = null;
+  if (els.imageInput) els.imageInput.value = "";
+  if (els.attachmentPreview) els.attachmentPreview.hidden = true;
+  if (els.attachBtn) els.attachBtn.classList.remove("active");
+}
+
+function selectImage(file) {
+  if (!file) return;
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+    toast("Choose a PNG, JPEG, or WebP image.");
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    toast("Choose an image smaller than 4 MB.");
+    return;
+  }
+  clearAttachment();
+  const generation = state.attachmentGeneration;
+  const reader = new FileReader();
+  state.fileReader = reader;
+  reader.onerror = () => {
+    if (generation === state.attachmentGeneration) toast("Could not read that image.");
+  };
+  reader.onload = () => {
+    if (generation !== state.attachmentGeneration) return;
+    state.fileReader = null;
+    state.attachment = {
+      name: file.name,
+      mimeType: file.type,
+      dataUrl: String(reader.result),
+    };
+    els.attachmentThumb.src = state.attachment.dataUrl;
+    els.attachmentName.textContent = `${file.name} - ${(file.size / 1024).toFixed(0)} KB`;
+    els.attachmentPreview.hidden = false;
+    els.attachBtn.classList.add("active");
+  };
+  reader.readAsDataURL(file);
+}
+
 // ---------- customer selection and intelligence drawer ----------
 function setCustomerLogo(customer) {
   els.customerInitials.textContent = customer.initials;
@@ -675,8 +753,107 @@ function setCustomerLogo(customer) {
   els.customerLogo.alt = `${customer.name} logo`;
 }
 
+function generalModeDefinition() {
+  return {
+    id: "general",
+    name: "General Adviser",
+    icon: "compass",
+    modelLabel: "GPT-5.6 Sol",
+    supportsImages: true,
+    summary: `Fast, source-grounded conversation about ${state.customer.name}'s business, strategy, products, financial context, leadership, and recent developments.`,
+    businessValue: "Executive customer understanding and meeting coaching.",
+    prompts: state.customer.topics.slice(0, 3).map((topic) => `Brief me on ${topic.toLowerCase()} for ${state.customer.name}.`),
+    workflow: [],
+  };
+}
+
+function agentModes() {
+  return [generalModeDefinition(), ...(state.customer?.useCases || [])];
+}
+
+function currentModeDefinition() {
+  return agentModes().find((mode) => mode.id === state.agentMode) || generalModeDefinition();
+}
+
+function renderAgentModes() {
+  const modes = agentModes();
+  const active = currentModeDefinition();
+  els.agentModeGrid.innerHTML = "";
+  for (const mode of modes) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "agent-mode-card";
+    button.dataset.agentMode = mode.id;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(mode.id === state.agentMode));
+    const shortName = mode.id === "general" ? "General Adviser" : mode.name;
+    button.innerHTML =
+      `<span class="mode-top"><span class="mode-icon">${icon(mode.icon || "compass", 14)}</span>` +
+      `<strong>${escapeHtml(shortName)}</strong></span>` +
+      `<small>${escapeHtml(mode.modelLabel || "GPT-5.6")}</small>`;
+    button.addEventListener("click", () => selectAgentMode(mode.id));
+    els.agentModeGrid.appendChild(button);
+  }
+
+  els.agentModeBadge.textContent = active.id === "general" ? "General" : "Synthetic demo";
+  const meta = [
+    active.modelLabel || "GPT-5.6",
+    active.supportsImages ? "Multimodal" : "Text + web",
+    "Public web grounded",
+  ];
+  const promptButtons = (active.prompts || []).slice(0, 3)
+    .map((prompt) => `<button type="button" data-demo-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`)
+    .join("");
+  const workflow = active.workflow?.length
+    ? `<details class="agent-workflow"><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>`
+    : `<details class="agent-workflow"><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details>`;
+  els.agentModeDetail.innerHTML =
+    `<div class="agent-detail-copy"><p><b>${escapeHtml(active.name)}</b> - ${escapeHtml(active.summary)}</p>` +
+    `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
+    `<p>${escapeHtml(active.businessValue)}</p><div class="agent-demo-prompts">${promptButtons}</div></div>${workflow}`;
+  els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
+    button.addEventListener("click", () => sendMessage(button.dataset.demoPrompt));
+  });
+
+  const canAttach = active.id === "general" || active.supportsImages;
+  els.attachBtn.disabled = !canAttach;
+  els.attachBtn.title = canAttach
+    ? "Attach an image for multimodal analysis"
+    : "This agent is designed for text and web-grounded scenarios";
+  if (!canAttach) clearAttachment();
+  els.briefBtn.innerHTML = icon("brief") + `<span>${active.id === "general" ? "Brief" : "Run demo"}</span>`;
+  els.input.placeholder = active.id === "general"
+    ? `Ask about ${state.customer.name}...`
+    : `Talk to ${active.name}...`;
+  els.avatarIdleCopy.textContent = `Turn on voice to talk with the ${active.name}.`;
+}
+
+function selectAgentMode(modeId, options = {}) {
+  const mode = agentModes().find((item) => item.id === modeId);
+  if (!mode || (modeId === state.agentMode && options.force !== true)) return;
+  interruptAvatar();
+  stopListening();
+  state.generation += 1;
+  state.busy = false;
+  els.sendBtn.disabled = false;
+  state.threadId = null;
+  state.pending = null;
+  state.greeted = false;
+  state.roleplayActive = false;
+  state.agentMode = mode.id;
+  els.roleplayBanner.hidden = true;
+  clearAttachment();
+  renderAgentModes();
+  renderWelcome();
+  try { localStorage.setItem(`clientsphere.agentMode.${state.customer.id}`, mode.id); } catch {}
+  if (options.announce !== false) {
+    toast(`${mode.name} loaded. A fresh ${mode.id === "general" ? "conversation" : "synthetic demo"} is ready.`);
+  }
+}
+
 function renderWelcome() {
   const customer = state.customer;
+  const mode = currentModeDefinition();
   els.messages.innerHTML = "";
   const wrap = document.createElement("div");
   wrap.className = "msg bot welcome";
@@ -685,15 +862,20 @@ function renderWelcome() {
   bubble.id = "welcomeBubble";
   els.welcomeBubble = bubble;
   const intro = document.createElement("p");
-  intro.innerHTML = `ClientSphere is focused on <b>${escapeHtml(customer.name)}</b>. Ask about the business, products, strategy, public financial reporting, leadership, initiatives, or recent developments.`;
+  intro.innerHTML = mode.id === "general"
+    ? `ClientSphere is focused on <b>${escapeHtml(customer.name)}</b>. Ask a quick question and the adviser will expand only when you request it.`
+    : `<b>${escapeHtml(mode.name)}</b> is ready as a synthetic ${escapeHtml(customer.name)} demo. Choose a starter or attach an image where supported.`;
   const chips = document.createElement("div");
   chips.className = "chips";
-  customer.topics.slice(0, 4).forEach((topic) => {
+  const starters = mode.id === "general"
+    ? customer.topics.slice(0, 4).map((topic) => `Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`)
+    : mode.prompts;
+  starters.slice(0, 4).forEach((prompt) => {
     const button = document.createElement("button");
     button.className = "chip";
     button.type = "button";
-    button.textContent = topic;
-    button.addEventListener("click", () => sendMessage(`Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`));
+    button.textContent = prompt;
+    button.addEventListener("click", () => sendMessage(prompt));
     chips.appendChild(button);
   });
   bubble.append(intro, chips);
@@ -746,6 +928,7 @@ async function selectCustomer(customerId, options = {}) {
   stopListening();
   state.generation += 1;
   state.busy = false;
+  els.sendBtn.disabled = false;
   state.threadId = null;
   state.pending = null;
   state.greeted = false;
@@ -762,9 +945,13 @@ async function selectCustomer(customerId, options = {}) {
   setCustomerLogo(state.customer);
   els.customerName.textContent = state.customer.name;
   els.customerSector.textContent = state.customer.sector;
-  els.avatarIdleCopy.textContent = `Turn on voice to talk with the ${state.customer.name} adviser.`;
-  els.input.placeholder = `Ask about ${state.customer.name}...`;
   els.drawerTitle.textContent = `${state.customer.name} intelligence`;
+  let savedMode = "general";
+  try { savedMode = localStorage.getItem(`clientsphere.agentMode.${state.customer.id}`) || "general"; } catch {}
+  if (!["general", ...(state.customer.useCases || []).map((useCase) => useCase.id)].includes(savedMode)) savedMode = "general";
+  state.agentMode = savedMode;
+  clearAttachment();
+  renderAgentModes();
   renderWelcome();
   renderResources();
   renderCustomerOptions(els.customerSearch.value);
@@ -792,6 +979,7 @@ function renderResources() {
         item.type = "button";
         item.addEventListener("click", () => {
           openDrawer(false);
+          if (l.agentMode) selectAgentMode(l.agentMode);
           dispatch(l.prompt, { userText: l.title });
         });
       }
@@ -865,7 +1053,7 @@ function downloadRecap() {
   const blob = new Blob([state.lastRecap || ""], { type: "text/markdown" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `clientsphere-${state.customer.id}-recap-${new Date().toISOString().slice(0, 10)}.md`;
+  a.download = `clientsphere-${state.customer.id}-${state.agentMode}-recap-${new Date().toISOString().slice(0, 10)}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -946,6 +1134,7 @@ function paintIcons() {
   els.briefBtn.innerHTML = icon("brief") + "<span>Brief</span>";
   els.recapBtn.innerHTML = icon("recap") + "<span>Recap</span>";
   document.getElementById("aboutBtn").innerHTML = icon("info") + "<span>About</span>";
+  els.attachBtn.innerHTML = icon("paperclip", 19);
   els.micBtn.innerHTML = icon("mic", 20);
   els.stopBtn.innerHTML = icon("stop", 16) + "<span>Stop</span>";
   els.sendBtn.innerHTML = icon("send", 18);
@@ -979,6 +1168,9 @@ async function init() {
     els.input.style.height = Math.min(els.input.scrollHeight, 140) + "px";
   });
   els.voiceToggle.addEventListener("click", () => setVoiceOn(!state.voiceOn));
+  els.attachBtn.addEventListener("click", () => els.imageInput.click());
+  els.imageInput.addEventListener("change", () => selectImage(els.imageInput.files?.[0]));
+  els.attachmentRemove.addEventListener("click", clearAttachment);
   els.micBtn.addEventListener("click", startListening);
   els.stopBtn.addEventListener("click", () => interruptAvatar(true));
   els.genderSeg.addEventListener("click", (e) => {
@@ -1002,9 +1194,14 @@ async function init() {
 
   // Feature toolbar
   els.roleplayBtn.addEventListener("click", () => openModal("roleplayModal", true));
-  els.briefBtn.addEventListener("click", () =>
-    dispatch("[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.", { userText: "Build customer brief", speak: false })
-  );
+  els.briefBtn.addEventListener("click", () => {
+    const mode = currentModeDefinition();
+    if (mode.id === "general") {
+      dispatch("[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.", { userText: "Build customer brief", speak: false });
+    } else {
+      sendMessage(`Run a complete synthetic demonstration of the ${mode.name} workflow for ${state.customer.name}. Make the synthetic inputs, six workflow steps, human controls, business value, measures, and next proof point visible.`);
+    }
+  });
   els.recapBtn.addEventListener("click", openRecap);
   document.getElementById("aboutBtn").addEventListener("click", () => openModal("aboutModal", true));
   els.roleplayEndBtn.addEventListener("click", endRoleplayAndScore);

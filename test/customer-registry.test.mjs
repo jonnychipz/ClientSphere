@@ -14,8 +14,9 @@ test("catalogue entries expose safe public fields", () => {
   assert.match(customer.logoUrl, /^https:\/\//);
   assert.deepEqual(
     Object.keys(customerPublicView(customer)).sort(),
-    ["domain", "id", "initials", "logoUrl", "name", "sector", "summary", "topics", "website"].sort(),
+    ["domain", "id", "initials", "logoUrl", "name", "sector", "summary", "topics", "useCases", "website"].sort(),
   );
+  assert.equal(customerPublicView(customer).useCases.length, 3);
 });
 
 test("unknown customer ids are rejected", () => {

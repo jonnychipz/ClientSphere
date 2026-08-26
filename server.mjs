@@ -12,7 +12,9 @@ import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 import {
   customers, getCustomer, customerPublicView, loadAgentMetadata,
 } from "./customer-registry.mjs";
+import { buildCustomerUseCases, getCustomerUseCase } from "./use-case-registry.mjs";
 import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
+import { buildAgentInput } from "./multimodal-input.mjs";
 import {
   DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
@@ -48,7 +50,10 @@ try {
   process.exit(1);
 }
 for (const customer of customers) {
-  if (!agentMetadata.customers[customer.id]?.agentName) {
+  const metadata = agentMetadata.customers[customer.id];
+  const useCasesReady = buildCustomerUseCases(customer)
+    .every((useCase) => metadata?.useCases?.[useCase.id]?.agentName);
+  if (!metadata?.agentName || !useCasesReady) {
     console.error(`Customer agent metadata is missing '${customer.id}'.`);
     process.exit(1);
   }
@@ -107,6 +112,16 @@ function resourcesFor(customer) {
         title: topic,
         sub: `Ask the ${customer.name} adviser`,
         prompt: `Give me an evidence-led briefing on ${topic.toLowerCase()} for ${customer.name}. Include dates and public sources.`,
+      })),
+    },
+    {
+      group: "Synthetic use-case agents",
+      links: buildCustomerUseCases(customer).map((useCase) => ({
+        icon: useCase.icon,
+        title: useCase.name,
+        sub: useCase.businessValue,
+        prompt: useCase.prompts[0],
+        agentMode: useCase.id,
       })),
     },
     {
@@ -215,7 +230,7 @@ const SETTINGS_AVATAR_VIS = "avatarVisibility"; // { [avatarId]: boolean }
 
 const app = express();
 app.set("trust proxy", 1); // App Service terminates TLS at a proxy; trust X-Forwarded-Proto/Host
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "7mb" }));
 app.use(express.urlencoded({ extended: false })); // for the email confirm-action POST form
 
 // ---------------- Authentication & access control ----------------
@@ -574,11 +589,16 @@ app.get("/api/customers/:customerId", requireApproved(async (req, res) => {
 }));
 
 app.get("/healthz", (req, res) => {
+  const agentModesConfigured = customers.reduce((total, customer) => {
+    const metadata = agentMetadata.customers[customer.id];
+    return total + (metadata?.agentName ? 1 : 0) + Object.keys(metadata?.useCases || {}).length;
+  }, 0);
   res.json({
     status: "ok",
     app: "ClientSphere",
     customers: customers.length,
     agentsConfigured: Object.keys(agentMetadata.customers).length,
+    agentModesConfigured,
   });
 });
 
@@ -656,9 +676,9 @@ function renderResponse(response, fileMap) {
   return { text: text.trim(), citations };
 }
 
-async function runAgent(previousResponseId, agentName, customer, message) {
+async function runAgent(previousResponseId, agentName, customer, input) {
   const agentReference = { name: agentName, type: "agent_reference" };
-  const request = { input: message };
+  const request = { input };
   if (previousResponseId) request.previous_response_id = previousResponseId;
   let response = await openAI.responses.create(
     request,
@@ -688,46 +708,54 @@ async function runAgent(previousResponseId, agentName, customer, message) {
 }
 
 app.post("/api/chat", requireApproved(async (req, res) => {
-  const { message, threadId, customerId } = req.body || {};
+  const { message, threadId, customerId, agentMode = "general", attachments } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   const customer = getCustomer(customerId);
   if (!customer) return res.status(400).json({ error: "valid customerId required" });
-  const customerAgent = agentMetadata.customers[customer.id];
+  const customerMetadata = agentMetadata.customers[customer.id];
+  const useCase = agentMode === "general" ? null : getCustomerUseCase(customer, agentMode);
+  if (agentMode !== "general" && !useCase) return res.status(400).json({ error: "valid agentMode required" });
+  const customerAgent = agentMode === "general"
+    ? (customerMetadata.general || customerMetadata)
+    : customerMetadata.useCases?.[agentMode];
+  if (!customerAgent?.agentName) return res.status(503).json({ error: "Selected agent is not provisioned yet." });
   try {
+    const input = buildAgentInput(message.trim(), attachments);
     let previousResponseId = null;
     if (threadId) {
       previousResponseId = verifyThreadToken(
         threadId,
-        { customerId: customer.id, userLogin: req.authUser.login },
+        { customerId: customer.id, agentMode, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       );
       if (!previousResponseId) {
         return res.status(409).json({ error: "Conversation belongs to a different customer. Start a new conversation." });
       }
     }
-    const response = await runAgent(previousResponseId, customerAgent.agentName, customer, message);
+    const response = await runAgent(previousResponseId, customerAgent.agentName, customer, input);
     if (response.status !== "completed") {
       return res.status(502).json({
         error: `Response ${response.status}`,
         detail: response.error?.message || response.incomplete_details?.reason,
       });
     }
-    const { text: reply, citations } = renderResponse(response, customerAgent.fileMap || {});
+    const { text: reply, citations } = renderResponse(response, customerMetadata.fileMap || {});
     // Capture usage (don't log raw system directives verbatim — just the kind).
     const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
-    logUsage(req.authUser.login, "chat", `${customer.id}:${kind}`);
+    logUsage(req.authUser.login, "chat", `${customer.id}:${agentMode}:${kind}`);
     res.json({
       threadId: createThreadToken(
-        { customerId: customer.id, threadId: response.id, userLogin: req.authUser.login },
+        { customerId: customer.id, agentMode, threadId: response.id, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       ),
       customerId: customer.id,
+      agentMode,
       reply,
       citations,
     });
   } catch (err) {
     console.error("chat error:", err);
-    res.status(500).json({ error: "Chat failed", detail: err.message });
+    res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : "Chat failed", detail: err.statusCode ? undefined : err.message });
   }
 }));
 

@@ -16,11 +16,17 @@ param deploymentPrincipalObjectId string
 @description('Signing key used for application sessions.')
 param sessionSecret string
 
-@description('Model deployment name.')
-param modelName string = 'gpt-5.4'
+@description('Latest flagship model for the general adviser and Sol use cases.')
+param modelName string = 'gpt-5.6-sol'
 
-@description('Model version verified against the source Hubble deployment.')
-param modelVersion string = '2026-03-05'
+@description('Current GPT-5.6 model version available in Sweden Central.')
+param modelVersion string = '2026-07-09'
+
+@description('Latest Luna model for multimodal experience and visual workflows.')
+param lunaModelName string = 'gpt-5.6-luna'
+
+@description('Latest Terra model for deep operational reasoning workflows.')
+param terraModelName string = 'gpt-5.6-terra'
 
 @description('Existing application image preserved across infrastructure updates.')
 param applicationImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -127,6 +133,42 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
   }
 }
 
+resource lunaModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundry
+  name: lunaModelName
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 50
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: lunaModelName
+      version: modelVersion
+    }
+    raiPolicyName: 'Microsoft.Default'
+    versionUpgradeOption: 'OnceCurrentVersionExpired'
+  }
+}
+
+resource terraModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundry
+  name: terraModelName
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 50
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: terraModelName
+      version: modelVersion
+    }
+    raiPolicyName: 'Microsoft.Default'
+    versionUpgradeOption: 'OnceCurrentVersionExpired'
+  }
+}
+
 resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   parent: foundry
   name: aiProjectName
@@ -211,6 +253,22 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'MODEL_DEPLOYMENT'
               value: modelDeployment.name
+            }
+            {
+              name: 'GENERAL_MODEL_DEPLOYMENT'
+              value: modelDeployment.name
+            }
+            {
+              name: 'USE_CASE_MODEL_SOL'
+              value: modelDeployment.name
+            }
+            {
+              name: 'USE_CASE_MODEL_LUNA'
+              value: lunaModelDeployment.name
+            }
+            {
+              name: 'USE_CASE_MODEL_TERRA'
+              value: terraModelDeployment.name
             }
             {
               name: 'SPEECH_REGION'

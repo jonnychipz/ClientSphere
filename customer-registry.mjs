@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildCustomerUseCases } from "./use-case-registry.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cataloguePath = path.join(__dirname, "config", "customers.json");
@@ -66,6 +67,7 @@ export function customerPublicView(customer) {
     sector: customer.sector,
     summary: customer.summary,
     topics: customer.topics,
+    useCases: buildCustomerUseCases(customer),
   };
 }
 

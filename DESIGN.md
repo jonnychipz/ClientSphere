@@ -27,6 +27,7 @@ Use `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif` throughout. Product
 - Desktop: the existing two-pane Hubble-derived structure remains recognizable. The left pane is the customer/avatar stage; the right pane is the working conversation.
 - The active customer selector is part of the persistent header and is keyboard searchable.
 - The customer intelligence drawer contains overview, business, offerings, initiatives, financials, leadership, news, and sources.
+- The conversation header contains a persistent four-tile agent switcher: General Adviser first, then three synthetic use cases with an active-mode detail panel, model/modality badges, workflow disclosure, and demo starters.
 - Tablet: preserve two panes while reducing stage controls.
 - Mobile: stack the customer stage above chat, keep the composer sticky, and move secondary controls into an inline disclosure.
 
@@ -35,6 +36,7 @@ Use `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif` throughout. Product
 - Buttons and fields share one radius, focus ring, disabled treatment, and 180ms state transition.
 - Customer selector rows show logo, name, domain, and selection state.
 - Source links show publisher/domain and open in a new tab.
+- Multimodal modes expose one familiar paperclip control and a compact image preview; text-first modes explain when image input is not central.
 - Customer topic actions are buttons that send a visible, editable prompt rather than hidden navigation.
 - Loading uses skeleton rows; errors remain in context with a retry action.
 

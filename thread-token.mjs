@@ -4,17 +4,18 @@ function signature(payload, secret) {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-export function createThreadToken({ customerId, threadId, userLogin }, secret) {
+export function createThreadToken({ customerId, agentMode = "general", threadId, userLogin }, secret) {
   if (!customerId || !threadId || !userLogin || !secret) throw new Error("Thread token fields and secret are required.");
   const payload = Buffer.from(JSON.stringify({
     customerId,
+    agentMode,
     threadId,
     userLogin: userLogin.toLowerCase(),
   })).toString("base64url");
   return `${payload}.${signature(payload, secret)}`;
 }
 
-export function verifyThreadToken(token, { customerId, userLogin }, secret) {
+export function verifyThreadToken(token, { customerId, agentMode = "general", userLogin }, secret) {
   if (!token || !customerId || !userLogin || !secret) return null;
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -27,6 +28,7 @@ export function verifyThreadToken(token, { customerId, userLogin }, secret) {
   try {
     const value = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (value.customerId !== customerId ||
+        value.agentMode !== agentMode ||
         value.userLogin !== userLogin.toLowerCase() ||
         !value.threadId) return null;
     return value.threadId;

@@ -132,7 +132,7 @@ jobs:
           base="${{ github.event.before }}"
           if [[ "${{ github.event_name }}" == "push" && -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
             git fetch --no-tags --depth=1 origin "$base"
-            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
+            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs use-case-registry.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
               changed=true
             fi
           elif [[ "${{ github.event_name }}" == "push" ]]; then
@@ -231,7 +231,7 @@ jobs:
         run: |
           url="${{ steps.outputs.outputs.app_url }}/healthz"
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error "$url" | jq -e '.status == "ok" and .customers == 42' >/dev/null; then
+            if curl --fail --silent --show-error "$url" | jq -e '.status == "ok" and .customers == 42 and .agentModesConfigured == 168' >/dev/null; then
               exit 0
             fi
             sleep 15

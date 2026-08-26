@@ -5,12 +5,13 @@ import { fileURLToPath } from "node:url";
 import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { customers } from "../customer-registry.mjs";
-import { buildCustomerInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
+import { buildCustomerInstructions, buildUseCaseInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
+import { buildCustomerUseCases, getGeneralModelDeployment } from "../use-case-registry.mjs";
 import { FETCH_DOC_TOOL } from "../webgrounding.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const endpoint = process.env.PROJECT_ENDPOINT;
-const model = process.env.MODEL_DEPLOYMENT || "gpt-5.4";
+const generalModel = getGeneralModelDeployment();
 const knowledgeRoot = path.join(root, "knowledge", "customers");
 const outputPath = path.join(root, "customer-agents.json");
 if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
@@ -71,12 +72,13 @@ async function upsertAgent({
   name,
   description,
   instructions,
+  modelDeployment,
+  mode,
   vectorStoreId,
-  previousStoreIds,
 }) {
   const definition = {
     kind: "prompt",
-    model,
+    model: modelDeployment,
     instructions,
     tools: [
       { type: "file_search", vector_store_ids: [vectorStoreId] },
@@ -87,19 +89,23 @@ async function upsertAgent({
     description,
     metadata: {
       clientsphereCustomerId: customerId,
+      clientsphereMode: mode,
       clientsphereManaged: "true",
     },
   };
   const agent = existingAgents.has(name)
     ? await project.agents.update(name, definition, options)
     : await project.agents.create(name, definition, options);
+  return agent;
+}
+
+async function cleanupStores(previousStoreIds, currentStoreId) {
   for (const previousStoreId of new Set(previousStoreIds || [])) {
-    if (!previousStoreId || previousStoreId === vectorStoreId) continue;
+    if (!previousStoreId || previousStoreId === currentStoreId) continue;
     await openAI.vectorStores.delete(previousStoreId).catch((error) => {
       console.warn(`Could not delete previous vector store ${previousStoreId}: ${error.message}`);
     });
   }
-  return agent;
 }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(knowledgeRoot, "manifest.json"), "utf8"));
@@ -107,7 +113,12 @@ const indexedAt = manifest.generatedAt;
 const metadata = {
   generatedAt: new Date().toISOString(),
   projectEndpoint: endpoint,
-  model,
+  models: {
+    general: generalModel,
+    luna: process.env.USE_CASE_MODEL_LUNA || "gpt-5.6-luna",
+    terra: process.env.USE_CASE_MODEL_TERRA || "gpt-5.6-terra",
+    sol: process.env.USE_CASE_MODEL_SOL || "gpt-5.6-sol",
+  },
   apiSurface: "foundry-v1",
   portfolio: null,
   customers: {},
@@ -127,12 +138,35 @@ for (const customer of customers) {
     name: agentName,
     description: `Public-source customer intelligence and meeting coach for ${customer.name}.`,
     instructions: buildCustomerInstructions(customer, indexedAt),
+    modelDeployment: generalModel,
+    mode: "general",
     vectorStoreId: store.id,
-    previousStoreIds: [
-      previousMetadata?.customers?.[customer.id]?.vectorStoreId,
-      ...(existingStoresByName.get(`clientsphere-${customer.id}-kb`) || []),
-    ],
   });
+  const useCaseAgents = {};
+  for (const useCase of buildCustomerUseCases(customer)) {
+    console.log(`  Creating ${useCase.name}...`);
+    const useCaseAgentName = `clientsphere-${customer.id}-uc-${useCase.id}`;
+    const useCaseAgent = await upsertAgent({
+      customerId: customer.id,
+      name: useCaseAgentName,
+      description: `Synthetic ${useCase.name} demonstration for ${customer.name}.`,
+      instructions: buildUseCaseInstructions(customer, useCase, indexedAt),
+      modelDeployment: useCase.modelDeployment,
+      mode: useCase.id,
+      vectorStoreId: store.id,
+    });
+    useCaseAgents[useCase.id] = {
+      agentName: useCaseAgentName,
+      agentVersion: useCaseAgent.versions.latest.version,
+      agentId: useCaseAgent.versions.latest.id,
+      model: useCase.modelDeployment,
+    };
+  }
+  await cleanupStores([
+    previousMetadata?.customers?.[customer.id]?.vectorStoreId,
+    previousMetadata?.customers?.[customer.id]?.general?.vectorStoreId,
+    ...(existingStoresByName.get(`clientsphere-${customer.id}-kb`) || []),
+  ], store.id);
   metadata.customers[customer.id] = {
     agentName,
     agentVersion: agent.versions.latest.version,
@@ -140,6 +174,13 @@ for (const customer of customers) {
     vectorStoreId: store.id,
     fileMap,
     indexedAt,
+    general: {
+      agentName,
+      agentVersion: agent.versions.latest.version,
+      agentId: agent.versions.latest.id,
+      model: generalModel,
+    },
+    useCases: useCaseAgents,
   };
 }
 
@@ -161,11 +202,13 @@ const portfolioAgent = await upsertAgent({
 
 You are the generic ClientSphere portfolio guide. Help the user select the right customer specialist and compare only public facts retrieved from the attached portfolio knowledge. Always name the customer attached to each fact and never blend customer identities.`,
   vectorStoreId: portfolioKnowledge.store.id,
-  previousStoreIds: [
-    previousMetadata?.portfolio?.vectorStoreId,
-    ...(existingStoresByName.get("clientsphere-portfolio-kb") || []),
-  ],
+  modelDeployment: generalModel,
+  mode: "portfolio",
 });
+await cleanupStores([
+  previousMetadata?.portfolio?.vectorStoreId,
+  ...(existingStoresByName.get("clientsphere-portfolio-kb") || []),
+], portfolioKnowledge.store.id);
 metadata.portfolio = {
   agentName: portfolioName,
   agentVersion: portfolioAgent.versions.latest.version,
