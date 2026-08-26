@@ -17,18 +17,25 @@ const knowledgeRoot = path.join(root, "knowledge", "customers");
 const outputPath = path.join(root, "customer-agents.json");
 if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
 
-const project = new AIProjectClient(endpoint, new DefaultAzureCredential());
+const credential = new DefaultAzureCredential();
+const project = new AIProjectClient(endpoint, credential);
 const agents = project.agents;
 const existingAgents = new Map();
-const existingStores = new Map();
+let previousMetadata = null;
 
 for await (const agent of agents.listAgents({ limit: 100, order: "desc" })) {
   const customerId = agent.metadata?.clientsphereCustomerId;
   if (customerId && !existingAgents.has(customerId)) existingAgents.set(customerId, agent);
 }
-for await (const store of agents.vectorStores.list({ limit: 100, order: "desc" })) {
-  if (store.name?.startsWith("clientsphere-") && !existingStores.has(store.name)) {
-    existingStores.set(store.name, store);
+
+if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
+  try {
+    const blob = new BlockBlobClient(process.env.CUSTOMER_AGENT_METADATA_BLOB_URL, credential);
+    previousMetadata = JSON.parse((await blob.downloadToBuffer()).toString("utf8"));
+  } catch (error) {
+    if (error.statusCode !== 404) {
+      console.warn(`Could not load previous agent metadata: ${error.message}`);
+    }
   }
 }
 
@@ -40,9 +47,8 @@ async function uploadProfile(customer) {
   });
 }
 
-async function upsertAgent({ customerId, name, description, instructions, fileIds }) {
+async function upsertAgent({ customerId, name, description, instructions, fileIds, previousStoreId }) {
   const storeName = `clientsphere-${customerId}-kb`;
-  const previousStore = existingStores.get(storeName);
   const store = await agents.vectorStores.createAndPoll({
     fileIds,
     name: storeName,
@@ -63,8 +69,8 @@ async function upsertAgent({ customerId, name, description, instructions, fileId
   const agent = previousAgent
     ? await agents.updateAgent(previousAgent.id, { model, ...options })
     : await agents.createAgent(model, options);
-  if (previousStore && previousStore.id !== store.id) {
-    await agents.vectorStores.delete(previousStore.id);
+  if (previousStoreId && previousStoreId !== store.id) {
+    await agents.vectorStores.delete(previousStoreId);
   }
   return { agent, store };
 }
@@ -90,6 +96,7 @@ for (const customer of customers) {
     description: `Public-source customer intelligence and meeting coach for ${customer.name}.`,
     instructions: buildCustomerInstructions(customer, indexedAt),
     fileIds: [file.id],
+    previousStoreId: previousMetadata?.customers?.[customer.id]?.vectorStoreId,
   });
   metadata.customers[customer.id] = {
     agentId: agent.id,
@@ -112,6 +119,7 @@ const portfolio = await upsertAgent({
 
 You are the generic ClientSphere portfolio guide. Help the user select the right customer specialist and compare only public facts retrieved from the attached portfolio knowledge. Always name the customer attached to each fact and never blend customer identities.`,
   fileIds: [catalogueFile.id, ...allFileIds],
+  previousStoreId: previousMetadata?.portfolio?.vectorStoreId,
 });
 metadata.portfolio = {
   agentId: portfolio.agent.id,
@@ -125,7 +133,7 @@ if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
   const payload = Buffer.from(JSON.stringify(metadata, null, 2));
   const blob = new BlockBlobClient(
     process.env.CUSTOMER_AGENT_METADATA_BLOB_URL,
-    new DefaultAzureCredential(),
+    credential,
   );
   await blob.uploadData(payload, {
     blobHTTPHeaders: { blobContentType: "application/json; charset=utf-8" },
