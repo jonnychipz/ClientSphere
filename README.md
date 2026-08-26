@@ -12,7 +12,7 @@ ClientSphere is a customer-specific public-intelligence and meeting-coaching app
 - Evidence-led executive brief, roleplay and scorecard, session recap, citations, and public links.
 - Azure Speech real-time avatars, speech-to-text, barge-in, scenes, and the complete Hubble built-in voice catalogue.
 - Optional custom Jonnychipz avatar/voice wiring, disabled until assets become available.
-- GitHub OAuth access approval, Azure Table Storage audit/usage data, and an admin dashboard.
+- GitHub OAuth access approval, audit/usage data, and an admin dashboard.
 - Bicep infrastructure and GitHub Actions deployment using secretless OIDC.
 
 ## Customer set
@@ -34,9 +34,9 @@ Browser
 Azure Container Apps managed identity
   |-- Azure AI Foundry / GPT-5.4
   |-- Azure Speech avatar and STT
-  |-- Blob metadata for customer agent IDs
-  |-- Table Storage for users, usage, logs, settings, and tokens
-  `-- Key Vault session secret
+  |-- agent metadata embedded in the deployed image
+  |-- single-replica local user, usage, log, setting, and token store
+  `-- Key Vault and Container App session secret
 ```
 
 ## Local development

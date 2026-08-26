@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
-import { BlockBlobClient } from "@azure/storage-blob";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
 import { FETCH_DOC_TOOL } from "../webgrounding.mjs";
@@ -20,21 +19,22 @@ const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(endpoint, credential);
 const openAI = project.getOpenAIClient();
 const existingAgents = new Set();
+const existingStoresByName = new Map();
 let previousMetadata = null;
 
 for await (const agent of project.agents.list({ limit: 100, order: "desc" })) {
   existingAgents.add(agent.name);
 }
 
-if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
-  try {
-    const blob = new BlockBlobClient(process.env.CUSTOMER_AGENT_METADATA_BLOB_URL, credential);
-    previousMetadata = JSON.parse((await blob.downloadToBuffer()).toString("utf8"));
-  } catch (error) {
-    if (error.statusCode !== 404 && error.status !== 404) {
-      console.warn(`Could not load previous agent metadata: ${error.message || error.code}`);
-    }
-  }
+for await (const store of openAI.vectorStores.list({ limit: 100, order: "desc" })) {
+  if (!store.name?.startsWith("clientsphere-")) continue;
+  const ids = existingStoresByName.get(store.name) || [];
+  ids.push(store.id);
+  existingStoresByName.set(store.name, ids);
+}
+
+if (fs.existsSync(outputPath)) {
+  previousMetadata = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 }
 
 const functionTool = {
@@ -72,7 +72,7 @@ async function upsertAgent({
   description,
   instructions,
   vectorStoreId,
-  previousStoreId,
+  previousStoreIds,
 }) {
   const definition = {
     kind: "prompt",
@@ -93,7 +93,8 @@ async function upsertAgent({
   const agent = existingAgents.has(name)
     ? await project.agents.update(name, definition, options)
     : await project.agents.create(name, definition, options);
-  if (previousStoreId && previousStoreId !== vectorStoreId) {
+  for (const previousStoreId of new Set(previousStoreIds || [])) {
+    if (!previousStoreId || previousStoreId === vectorStoreId) continue;
     await openAI.vectorStores.del(previousStoreId).catch((error) => {
       console.warn(`Could not delete previous vector store ${previousStoreId}: ${error.message}`);
     });
@@ -127,7 +128,10 @@ for (const customer of customers) {
     description: `Public-source customer intelligence and meeting coach for ${customer.name}.`,
     instructions: buildCustomerInstructions(customer, indexedAt),
     vectorStoreId: store.id,
-    previousStoreId: previousMetadata?.customers?.[customer.id]?.vectorStoreId,
+    previousStoreIds: [
+      previousMetadata?.customers?.[customer.id]?.vectorStoreId,
+      ...(existingStoresByName.get(`clientsphere-${customer.id}-kb`) || []),
+    ],
   });
   metadata.customers[customer.id] = {
     agentName,
@@ -157,7 +161,10 @@ const portfolioAgent = await upsertAgent({
 
 You are the generic ClientSphere portfolio guide. Help the user select the right customer specialist and compare only public facts retrieved from the attached portfolio knowledge. Always name the customer attached to each fact and never blend customer identities.`,
   vectorStoreId: portfolioKnowledge.store.id,
-  previousStoreId: previousMetadata?.portfolio?.vectorStoreId,
+  previousStoreIds: [
+    previousMetadata?.portfolio?.vectorStoreId,
+    ...(existingStoresByName.get("clientsphere-portfolio-kb") || []),
+  ],
 });
 metadata.portfolio = {
   agentName: portfolioName,
@@ -170,11 +177,4 @@ metadata.portfolio = {
 
 const payload = Buffer.from(JSON.stringify(metadata, null, 2));
 fs.writeFileSync(outputPath, payload);
-if (process.env.CUSTOMER_AGENT_METADATA_BLOB_URL) {
-  const blob = new BlockBlobClient(process.env.CUSTOMER_AGENT_METADATA_BLOB_URL, credential);
-  await blob.uploadData(payload, {
-    blobHTTPHeaders: { blobContentType: "application/json; charset=utf-8" },
-  });
-  console.log(`Metadata uploaded to ${process.env.CUSTOMER_AGENT_METADATA_BLOB_URL}.`);
-}
 console.log(`Provisioned ${customers.length} customer agents plus the portfolio guide.`);

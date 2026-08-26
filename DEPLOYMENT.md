@@ -27,12 +27,11 @@ The `infra/main.bicep` deployment creates:
 | Container App | `clientsphere-95bc` |
 | Container Apps environment | `cae-clientsphere-95bc` |
 | Azure Container Registry | `acrclientsphere95bc` |
-| Storage | `stclientsphere95bc` |
 | Key Vault | `kv-clientsphere-95bc` |
 | Application Insights | `appi-clientsphere-95bc` |
 | Log Analytics | `log-clientsphere-95bc` |
 
-The Container App uses managed identity for Foundry, Speech, Blob, Table Storage, and private image pulls.
+The Container App uses managed identity for Foundry, Speech, and private image pulls.
 
 ## Deployment workflow
 
@@ -43,11 +42,11 @@ Every push to `main`:
 3. Signs into Azure with GitHub OIDC.
 4. Creates or updates the Azure resources.
 5. Refreshes public customer research and Foundry agents when their definitions changed or metadata is absent.
-6. Uploads customer-agent metadata to private Blob Storage.
+6. Compresses agent state into the Container App management-plane configuration and embeds full metadata in the image.
 7. Builds the image in Azure Container Registry and deploys it to Azure Container Apps Consumption.
 8. Verifies `/healthz` reports all 42 customer agents.
 
-The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, uploads metadata, and restarts the app.
+The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, then builds and deploys a refreshed image.
 
 ## GitHub OAuth
 

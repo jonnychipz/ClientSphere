@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BlobClient } from "@azure/storage-blob";
-import { DefaultAzureCredential } from "@azure/identity";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cataloguePath = path.join(__dirname, "config", "customers.json");
@@ -79,13 +77,6 @@ function validateMetadata(payload, source) {
 }
 
 export async function loadAgentMetadata(metaPath = process.env.CUSTOMER_AGENT_META_PATH) {
-  const blobUrl = process.env.CUSTOMER_AGENT_METADATA_BLOB_URL;
-  if (blobUrl) {
-    const response = await new BlobClient(blobUrl, new DefaultAzureCredential()).download();
-    const chunks = [];
-    for await (const chunk of response.readableStreamBody) chunks.push(Buffer.from(chunk));
-    return validateMetadata(JSON.parse(Buffer.concat(chunks).toString("utf8")), blobUrl);
-  }
   const resolved = metaPath ? path.resolve(metaPath) : path.join(__dirname, "customer-agents.json");
   return validateMetadata(JSON.parse(fs.readFileSync(resolved, "utf8")), resolved);
 }

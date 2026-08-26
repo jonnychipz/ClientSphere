@@ -79,6 +79,21 @@ jobs:
             --tags application=ClientSphere managedBy=GitHubActions \
             --output none
 
+          current_image=$(az containerapp show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
+            --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
+          if [[ -z "$current_image" ]]; then
+            current_image="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+          fi
+
+          agent_state=$(az containerapp show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
+            --query "properties.template.containers[0].env[?name=='CLIENTSPHERE_AGENT_STATE_B64'].value | [0]" \
+            -o tsv 2>/dev/null || true)
+          echo "PREVIOUS_AGENT_STATE_B64=$agent_state" >> "$GITHUB_ENV"
+
           az deployment group create \
             --name clientsphere-main \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
@@ -86,6 +101,8 @@ jobs:
             --parameters \
               deploymentPrincipalObjectId="${{ vars.AZURE_CLIENT_OBJECT_ID }}" \
               sessionSecret="${{ secrets.SESSION_SECRET }}" \
+              applicationImage="$current_image" \
+              agentStateB64="$agent_state" \
             --output json > deployment.json
 
       - name: Export deployment outputs
@@ -93,8 +110,6 @@ jobs:
         shell: bash
         run: |
           echo "PROJECT_ENDPOINT=$(jq -r '.properties.outputs.projectEndpoint.value' deployment.json)" >> "$GITHUB_ENV"
-          echo "CUSTOMER_AGENT_METADATA_BLOB_URL=$(jq -r '.properties.outputs.metadataBlobUrl.value' deployment.json)" >> "$GITHUB_ENV"
-          echo "STORAGE_ACCOUNT=$(jq -r '.properties.outputs.storageAccountName.value' deployment.json)" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_NAME=$(jq -r '.properties.outputs.containerAppName.value' deployment.json)" >> "$GITHUB_ENV"
           echo "REGISTRY_NAME=$(jq -r '.properties.outputs.containerRegistryName.value' deployment.json)" >> "$GITHUB_ENV"
           echo "REGISTRY_SERVER=$(jq -r '.properties.outputs.containerRegistryServer.value' deployment.json)" >> "$GITHUB_ENV"
@@ -102,17 +117,17 @@ jobs:
 
       - run: npm ci
 
+      - name: Restore previous agent metadata
+        shell: bash
+        run: |
+          if [[ -n "$PREVIOUS_AGENT_STATE_B64" ]]; then
+            printf '%s' "$PREVIOUS_AGENT_STATE_B64" | base64 --decode | gzip --decompress > customer-agents.json
+          fi
+
       - name: Decide whether customer agents need refresh
         id: agent_refresh
         shell: bash
         run: |
-          exists=$(az storage blob exists \
-            --account-name "$STORAGE_ACCOUNT" \
-            --container-name config \
-            --name customer-agents.json \
-            --auth-mode login \
-            --query exists -o tsv || echo false)
-
           changed=false
           base="${{ github.event.before }}"
           if [[ "${{ github.event_name }}" == "push" && -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
@@ -125,7 +140,7 @@ jobs:
           fi
 
           requested="${{ github.event.inputs.refresh_customer_agents || 'false' }}"
-          if [[ "$exists" != "true" || "$changed" == "true" || "$requested" == "true" ]]; then
+          if [[ ! -f customer-agents.json || "$changed" == "true" || "$requested" == "true" ]]; then
             echo "refresh=true" >> "$GITHUB_OUTPUT"
           else
             echo "refresh=false" >> "$GITHUB_OUTPUT"
@@ -137,18 +152,16 @@ jobs:
 
       - name: Provision customer agents
         if: steps.agent_refresh.outputs.refresh == 'true'
+        run: npm run agents:provision
+
+      - name: Preserve agent metadata
         shell: bash
         run: |
-          for attempt in 1 2 3 4 5; do
-            if npm run agents:provision; then
-              exit 0
-            fi
-            if [[ "$attempt" == "5" ]]; then
-              exit 1
-            fi
-            echo "Foundry role propagation pending; retrying in 30 seconds..."
-            sleep 30
-          done
+          if [[ ! -s customer-agents.json ]]; then
+            echo "customer-agents.json is missing or empty" >&2
+            exit 1
+          fi
+          echo "AGENT_STATE_B64=$(gzip --stdout customer-agents.json | base64 --wrap=0)" >> "$GITHUB_ENV"
 
       - name: Build application container
         shell: bash
@@ -182,6 +195,7 @@ jobs:
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --name "$CONTAINER_APP_NAME" \
               --image "$REGISTRY_SERVER/clientsphere:${{ github.sha }}" \
+              --set-env-vars CLIENTSPHERE_AGENT_STATE_B64="$AGENT_STATE_B64" \
               --output none; then
               exit 0
             fi
