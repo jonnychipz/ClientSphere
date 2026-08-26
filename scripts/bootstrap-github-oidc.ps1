@@ -42,6 +42,10 @@ if (-not $identity) {
 }
 
 $credentialName = "clientsphere-github-production"
+$repositoryParts = $Repository.Split("/", 2)
+$ownerId = gh api "users/$($repositoryParts[0])" --jq ".id"
+$repositoryId = gh api "repos/$Repository" --jq ".id"
+$federatedSubject = "repo:$($repositoryParts[0])@${ownerId}/$($repositoryParts[1])@${repositoryId}:environment:production"
 $credential = az identity federated-credential list `
   --subscription $SubscriptionId `
   --resource-group $IdentityResourceGroup `
@@ -55,8 +59,16 @@ if (-not $credential) {
     --identity-name $IdentityName `
     --name $credentialName `
     --issuer "https://token.actions.githubusercontent.com" `
-    --subject "repo:${Repository}:environment:production" `
+    --subject $federatedSubject `
     --audiences "api://AzureADTokenExchange" `
+    --output none
+} elseif ($credential.subject -ne $federatedSubject) {
+  az identity federated-credential update `
+    --subscription $SubscriptionId `
+    --resource-group $IdentityResourceGroup `
+    --identity-name $IdentityName `
+    --name $credentialName `
+    --subject $federatedSubject `
     --output none
 }
 
