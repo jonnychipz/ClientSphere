@@ -1,4 +1,4 @@
-// admin.js — Hubble admin dashboard: access requests, usage, system logs.
+// ClientSphere admin dashboard: access requests, usage, system logs.
 const el = (id) => document.getElementById(id);
 
 function toast(msg) {

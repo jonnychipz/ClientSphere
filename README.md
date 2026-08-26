@@ -1,102 +1,85 @@
-# Hubble — Your GitHub Sales Coach 🛰️
+# ClientSphere
 
-An AI voice + avatar coach that helps sellers get up to speed selling the **entire GitHub portfolio**. Hubble is deep product/commercial expert, researcher and sales coach in one — built on **Azure AI Foundry (GPT‑5.4)** with the **Agent framework**, a **real‑time talking avatar**, **speech‑to‑text**, and a clean single‑page web app.
+ClientSphere is a customer-specific public-intelligence and meeting-coaching application built on Azure AI Foundry. It preserves Hubble's proven two-pane voice/avatar experience while replacing the GitHub-only knowledge domain with 42 isolated customer agents sourced from the `SME&C Accounts` Edge favourites.
 
-**Live:** https://hubble-coach-kehfuc.azurewebsites.net · **Deploy/CI-CD:** see [`DEPLOYMENT.md`](DEPLOYMENT.md) · **Auth:** see [`AUTH-SETUP.md`](AUTH-SETUP.md)
+## Capabilities
 
-![Hubble live](hubble-live.png)
+- Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
+- One deterministic Foundry agent and vector store per customer, plus a generic portfolio guide.
+- Customer-owned conversation tokens that prevent threads being reused across customer agents.
+- Public-source research over official customer websites, refreshed weekly with retrieval notes and timestamps.
+- Guarded live web grounding restricted to the active customer's official domain and approved public registries.
+- Evidence-led executive brief, roleplay and scorecard, session recap, citations, and public links.
+- Azure Speech real-time avatars, speech-to-text, barge-in, scenes, and the complete Hubble built-in voice catalogue.
+- Optional custom Jonnychipz avatar/voice wiring, disabled until assets become available.
+- GitHub OAuth access approval, Azure Table Storage audit/usage data, and an admin dashboard.
+- Bicep infrastructure and GitHub Actions deployment using secretless OIDC.
 
-## What it does
-- **GitHub-branded identity** — Octocat logo as the app icon and infused into the idle orb; "HUBBLE" wordmark in a technical display font with the strapline *Your AI GitHub sales coach*.
-- **Strictly GitHub-only** — Hubble answers only on GitHub products, pricing, licensing and selling. Anything off-topic gets a friendly redirect with example questions to ask instead.
-- **Greets you by name** — when a conversation starts, Hubble asks your first name and uses it throughout.
-- **Conversational, spoken style** — short, get-to-the-point answers (no monologues); when an answer would be long, Hubble gives the headline and **asks if you want the long version**.
-- **Coaches around the answer** — explains the surrounding GitHub context and customer impact, and proactively asks for customer/deal context to tailor pricing, discovery questions, positioning and next steps.
-- **Official documentation links in chat** — answers include clickable official GitHub / Microsoft Learn links (never read aloud).
-- **Hideaway resources drawer** — a slide-in panel (☰) with curated links to GitHub pricing, Copilot, Advanced Security, docs, Trust Center, roadmap, changelog and more.
-- **Voice assistant on/off** — toggle a live, lip‑synced **talking avatar** that speaks Hubble's replies.
-- **Barge-in** — typing or talking instantly stops the avatar mid-sentence and refocuses on the new question (thread keeps context).
-- **Stop button** — a red ⏹ Stop appears while Hubble is speaking to silence the avatar on demand.
-- **Hands the mic back** — after Hubble finishes speaking, the mic re-opens automatically — **except** when you signal you're ending the call (e.g. "bye", "that's all"), where it stays closed.
-- **Avatar bodies tied to each voice** — every voice picks a **distinct avatar body** (Lisa, Lori, Meg female; Harry, Max male). Changing the voice changes who you see.
-- **Scene backgrounds** — 10 photographic landscape/office scenes chroma-keyed behind the avatar. The **scene picker only appears while the avatar is live**, and **randomises on first load**.
-- **Type or talk** — full text chat plus a **microphone** (speech‑to‑text) input.
+## Customer set
 
-## Coaching toolkit
-A toolbar above the chat unlocks four power features:
-- **🎭 Roleplay & scorecard** — Hubble *becomes the customer* (CISO, CTO, VP Eng, Procurement or Dev champion, at three difficulty levels). Practise your pitch live, then **End & score me** for a coaching scorecard (ratings out of 5 + specific strengths and fixes).
-- **🧮 ROI calculator** — model seats × plan vs developer cost and productivity uplift → live annual cost, value, payback and ROI in USD/GBP/EUR, with a one-click "coach this business case".
-- **📋 Session recap** — generate a written recap (topics, key facts, action items, official links) and **copy / download .md / email** it.
-- **🌐 Live web grounding** — Hubble can fetch **current** info from official GitHub/Microsoft pages (`fetch_official_doc` tool, domain-allowlisted) when something may have changed since the June-2026 knowledge base.
+`config/customers.json` contains the 42 official sites captured from the Edge favourites folder. Generated website research is written to `knowledge/customers/` and deliberately ignored by Git because it is refreshed by GitHub Actions.
 
 ## Architecture
-```
-Browser SPA (public/)
-  ├── Chat UI ──────────────► POST /api/chat ──► Azure AI Foundry Agent (gpt‑5.4)
-  │                                              └─ file_search over GitHub KB (vector store) → citations
-  ├── Talking avatar (WebRTC) ─ GET /api/relay-token ─► Azure Speech avatar relay (ICE)
-  └── STT + avatar TTS ──────── GET /api/speech-token ─► Speech token (keyless)
 
-Backend (server.mjs, Express, Node)
-  └── DefaultAzureCredential (Entra ID) — keyless throughout
-      └─ exchanges an Entra token for a Speech token via the AIServices custom‑domain STS
-```
+```text
+Browser
+  |-- customer selector ------> GET /api/customers/:id
+  |-- customer chat ----------> POST /api/chat { customerId, threadId, message }
+  |                               |-- customer-specific Foundry agent
+  |                               |-- isolated file-search vector store
+  |                               `-- guarded fetch_public_source function tool
+  |-- avatar + speech --------> keyless Azure Speech token and relay endpoints
+  `-- GitHub OAuth -----------> approval and admin workflow
 
-### Azure resources (Sweden Central)
-| Resource | Purpose |
-|----------|---------|
-| `hubble-foundry` (AIServices) + project `hubble-proj` | Foundry project hosting the agent |
-| `gpt-5.4` deployment | The agent model |
-| `hubble-foundry` custom‑domain STS | Mints keyless Speech tokens (Entra → Speech token) |
-| Azure Speech (Sweden Central) | Real‑time TTS avatar + speech‑to‑text |
-
-> **Auth is 100% keyless (Microsoft Entra ID).** No API keys are stored or sent to the browser. The tenant enforces `disableLocalAuth`, so the backend uses `DefaultAzureCredential` and brokers short‑lived Speech tokens to the client.
-
-## Custom avatar & voice (your likeness)
-
-Hubble can use **your own face and voice** as the avatar via Azure's Custom Photo/Video Avatar + Custom Neural Voice. Both are **Limited Access (Responsible AI gated)** — you apply at https://aka.ms/customneural, prove consent, train in Microsoft Foundry, then flip a flag.
-
-The app is **already wired**: set the `CUSTOM_*` values in `.env` and a **"⭐ You (custom)"** preset appears in the Voice & body picker (`avatarConfig.customized`, `photoAvatarBaseModel`, and your custom voice). Full kit — consent scripts, photo spec, voice recording guide, and a step-by-step submission/training guide — is in **`custom-avatar/`**.
-
-## Sign-in & access control
-Hubble is gated behind **GitHub sign-in** with an **admin approval** workflow:
-- Users **sign in with GitHub**; new users land in a **pending** state until approved.
-- The admin (**jonnychipz**) reviews sign-ups in an **admin dashboard** (`/admin`) and **approves / denies / revokes** access.
-- All **usage is captured** (logins, chats, admin decisions) and shown as KPIs, per-user stats and an activity feed.
-- A **dev mode** lets you test the whole flow locally before creating an OAuth App. See **`AUTH-SETUP.md`**.
-
-## Project layout
-```
-.
-├── knowledge/                 GitHub product/pricing/licensing/coaching KB (→ vector store)
-├── public/                    Single‑page app (index.html, styles.css, app.js)
-├── setup-agent.mjs            Uploads KB, builds vector store, creates the Hubble agent
-├── server.mjs                 Express backend (chat proxy + token brokers + static)
-├── agent-meta.json            Generated: agent id, vector store id, file→source map
-└── .env                       Config (no secrets — endpoints + ids only)
+Azure App Service managed identity
+  |-- Azure AI Foundry / GPT-5.4
+  |-- Azure Speech avatar and STT
+  |-- Blob metadata for customer agent IDs
+  |-- Table Storage for users, usage, logs, settings, and tokens
+  `-- Key Vault session secret
 ```
 
-## Prerequisites
-- Node.js 20+ and Azure CLI, signed in: `az login` (account with **Cognitive Services User** on the Foundry + Speech resources).
-- The Azure resources above (already provisioned in the sandbox subscription).
+## Local development
 
-## Run it
 ```powershell
 npm install
-npm run setup     # one‑time: creates the agent + vector store, writes AGENT_ID to .env
-npm run update    # re‑apply Hubble's instructions/persona to the existing agent (after edits)
-npm start         # serves http://localhost:3000
+npm run customers:refresh
+
+# PROJECT_ENDPOINT must address an existing Foundry project.
+npm run agents:provision
+npm start
 ```
-Then open **http://localhost:3000**, ask a question, and click **Voice assistant: Off → On** to bring the avatar to life. Use the **Female/Male** toggle and **Voice** dropdown to change the presenter. Click the **🎙️** to talk.
 
-## API
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/config` | GET | Agent name, voice + avatar catalogue |
-| `/api/chat` | POST | `{ message, threadId? }` → `{ threadId, reply, citations[] }` |
-| `/api/speech-token` | GET | Keyless Speech auth token + region (for browser SDK) |
-| `/api/relay-token` | GET | ICE/relay servers for the avatar WebRTC peer connection |
+Copy `.env.example` to `.env`. Local development enables simulated GitHub login only when `NODE_ENV` is not `production` and OAuth credentials are absent.
 
-## Notes
-- Pricing in the knowledge base was **verified June 2026**; Hubble always reminds sellers to confirm live pricing at github.com/pricing before quoting formally. GBP/EUR figures are indicative conversions, not GitHub's billed local price.
-- To re‑provision the agent after editing the KB, just re‑run `npm run setup`.
+## Validation
+
+```powershell
+npm run check
+npm test
+az bicep build --file infra\main.bicep
+```
+
+## Azure deployment
+
+Target:
+
+- Tenant: `3081f76f-4086-4566-8b14-b57af1297762` (`mngenvmcap864574.onmicrosoft.com`)
+- Subscription: `c540854a-5c6f-4049-95bc-dce4eff11340`
+- Application region: UK South
+- Foundry/Speech region: Sweden Central
+- Model: `gpt-5.4`, version `2026-03-05`, Global Standard
+
+The one-time OIDC bootstrap creates only the GitHub deployment identity:
+
+```powershell
+.\scripts\bootstrap-github-oidc.ps1
+```
+
+After that, all platform and application changes are provisioned by `.github/workflows/deploy.yml`. Public customer research and agent definitions refresh every Monday through `.github/workflows/refresh-customer-agents.yml`.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) and [AUTH-SETUP.md](AUTH-SETUP.md).
+
+## Public-data boundary
+
+ClientSphere uses public sources only. It does not ingest Microsoft internal account data, private communications, or customer-confidential content. Agents are required to distinguish facts, inferences, and unknowns, and to state reporting periods for financial and time-sensitive claims.

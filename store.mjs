@@ -3,10 +3,10 @@
 // local dev still works. All functions are async.
 //
 // Tables:
-//   HubbleUsers   (PK="user", RK=login)         — access requests / profiles
-//   HubbleUsage   (PK=yyyymmdd, RK=ts-rand)      — usage events
-//   HubbleLogs    (PK=yyyymmdd, RK=ts-rand)      — system logs
-//   HubbleTokens  (PK="tok", RK=tokenId)         — single-use email-action tokens
+//   ClientSphereUsers   (PK="user", RK=login)     - access requests / profiles
+//   ClientSphereUsage   (PK=yyyymmdd, RK=ts-rand) - usage events
+//   ClientSphereLogs    (PK=yyyymmdd, RK=ts-rand) - system logs
+//   ClientSphereTokens  (PK="tok", RK=tokenId)    - single-use email-action tokens
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -31,15 +31,15 @@ let tables = null;
 async function initTables() {
   const cred = new DefaultAzureCredential();
   const svc = new TableServiceClient(TABLE_ENDPOINT, cred);
-  for (const t of ["HubbleUsers", "HubbleUsage", "HubbleLogs", "HubbleTokens", "HubbleSettings"]) {
+  for (const t of ["ClientSphereUsers", "ClientSphereUsage", "ClientSphereLogs", "ClientSphereTokens", "ClientSphereSettings"]) {
     try { await svc.createTable(t); } catch { /* exists */ }
   }
   tables = {
-    users: new TableClient(TABLE_ENDPOINT, "HubbleUsers", cred),
-    usage: new TableClient(TABLE_ENDPOINT, "HubbleUsage", cred),
-    logs: new TableClient(TABLE_ENDPOINT, "HubbleLogs", cred),
-    tokens: new TableClient(TABLE_ENDPOINT, "HubbleTokens", cred),
-    settings: new TableClient(TABLE_ENDPOINT, "HubbleSettings", cred),
+    users: new TableClient(TABLE_ENDPOINT, "ClientSphereUsers", cred),
+    usage: new TableClient(TABLE_ENDPOINT, "ClientSphereUsage", cred),
+    logs: new TableClient(TABLE_ENDPOINT, "ClientSphereLogs", cred),
+    tokens: new TableClient(TABLE_ENDPOINT, "ClientSphereTokens", cred),
+    settings: new TableClient(TABLE_ENDPOINT, "ClientSphereSettings", cred),
   };
 }
 

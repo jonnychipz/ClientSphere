@@ -3,11 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hubble — Your GitHub Sales Coach</title>
+  <title>ClientSphere - Customer Intelligence</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 </head>
@@ -17,11 +14,15 @@
     <section class="stage">
       <header class="brand">
         <div class="logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 2.2A9.8 9.8 0 0 0 8.9 21.3c.49.09.67-.21.67-.47v-1.84c-2.73.59-3.3-1.16-3.3-1.16-.45-1.13-1.09-1.43-1.09-1.43-.89-.61.07-.6.07-.6.99.07 1.5 1.01 1.5 1.01.88 1.5 2.3 1.07 2.86.82.09-.64.34-1.07.62-1.32-2.18-.25-4.47-1.09-4.47-4.85 0-1.07.38-1.95 1.01-2.64-.1-.25-.44-1.25.1-2.6 0 0 .83-.27 2.71 1.01a9.4 9.4 0 0 1 4.94 0c1.88-1.28 2.7-1.01 2.7-1.01.54 1.35.2 2.35.1 2.6.63.69 1.01 1.57 1.01 2.64 0 3.77-2.3 4.6-4.49 4.84.35.31.67.91.67 1.84v2.73c0 .26.18.57.68.47A9.8 9.8 0 0 0 12 2.2z"/></svg>
+          <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.25"/>
+            <ellipse cx="12" cy="12" rx="9" ry="4.5" transform="rotate(-28 12 12)"/>
+            <circle cx="18.5" cy="7.2" r="1.2" fill="currentColor" stroke="none"/>
+          </svg>
         </div>
         <div class="brand-text">
-          <h1>HUBBLE</h1>
-          <p class="tagline" id="tagline">Your AI GitHub sales coach</p>
+          <h1>ClientSphere</h1>
+          <p class="tagline" id="tagline">Public intelligence for every customer conversation</p>
         </div>
 
         <!-- Profile dropdown -->
@@ -34,10 +35,38 @@
           <div class="profile-menu" id="profileMenu" hidden></div>
         </div>
 
-        <button class="drawer-toggle" id="drawerToggle" title="GitHub resources" aria-label="Open GitHub resources"></button>
+        <button class="drawer-toggle" id="drawerToggle" title="Customer intelligence" aria-label="Open customer intelligence"></button>
 
         <span class="status" id="avatarStatus" title="Avatar status">offline</span>
       </header>
+
+      <div class="customer-context" id="customerContext">
+        <button class="customer-trigger" id="customerTrigger" type="button" popovertarget="customerPopover" aria-label="Select active customer">
+          <span class="customer-logo-shell">
+            <img id="customerLogo" alt="" />
+            <span class="customer-initials" id="customerInitials" aria-hidden="true">CS</span>
+          </span>
+          <span class="customer-trigger-copy">
+            <span class="customer-overline">Active customer</span>
+            <strong id="customerName">Select a customer</strong>
+            <span id="customerSector">Customer-specific public intelligence</span>
+          </span>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+        </button>
+      </div>
+
+      <div class="customer-popover" id="customerPopover" popover>
+        <div class="customer-popover-head">
+          <div>
+            <strong>Choose a customer</strong>
+            <span id="customerCount"></span>
+          </div>
+          <button type="button" class="customer-popover-close" popovertarget="customerPopover" popovertargetaction="hide" aria-label="Close customer selector">Close</button>
+        </div>
+        <label class="customer-search-label" for="customerSearch">Search customers</label>
+        <input id="customerSearch" class="customer-search" type="search" autocomplete="off" placeholder="Search by customer, sector, or domain" />
+        <div class="customer-options" id="customerOptions" role="listbox" aria-label="Customers"></div>
+      </div>
 
       <div class="avatar-wrap" id="avatarWrap">
         <video id="avatarVideo" autoplay playsinline muted></video>
@@ -45,9 +74,13 @@
         <audio id="avatarAudio" autoplay></audio>
         <div class="avatar-idle" id="avatarIdle">
           <div class="orb">
-            <svg class="orb-mark" viewBox="0 0 24 24" width="74" height="74"><path fill="#ffffff" d="M12 2.2A9.8 9.8 0 0 0 8.9 21.3c.49.09.67-.21.67-.47v-1.84c-2.73.59-3.3-1.16-3.3-1.16-.45-1.13-1.09-1.43-1.09-1.43-.89-.61.07-.6.07-.6.99.07 1.5 1.01 1.5 1.01.88 1.5 2.3 1.07 2.86.82.09-.64.34-1.07.62-1.32-2.18-.25-4.47-1.09-4.47-4.85 0-1.07.38-1.95 1.01-2.64-.1-.25-.44-1.25.1-2.6 0 0 .83-.27 2.71 1.01a9.4 9.4 0 0 1 4.94 0c1.88-1.28 2.7-1.01 2.7-1.01.54 1.35.2 2.35.1 2.6.63.69 1.01 1.57 1.01 2.64 0 3.77-2.3 4.6-4.49 4.84.35.31.67.91.67 1.84v2.73c0 .26.18.57.68.47A9.8 9.8 0 0 0 12 2.2z"/></svg>
+            <svg class="orb-mark" viewBox="0 0 24 24" width="74" height="74" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="3.25"/>
+              <ellipse cx="12" cy="12" rx="9" ry="4.5" transform="rotate(-28 12 12)"/>
+              <circle cx="18.5" cy="7.2" r="1.2" fill="currentColor" stroke="none"/>
+            </svg>
           </div>
-          <p>Turn on the voice assistant to bring Hubble to life</p>
+          <p id="avatarIdleCopy">Choose a customer, then turn on the voice assistant.</p>
         </div>
         <div class="speaking-bar" id="speakingBar"><span></span><span></span><span></span><span></span><span></span></div>
       </div>
@@ -81,9 +114,9 @@
     <section class="chat">
       <div class="chat-toolbar">
         <button type="button" class="tool-btn" id="roleplayBtn" title="Practice your pitch">Roleplay</button>
-        <button type="button" class="tool-btn" id="roiBtn" title="Build a business case">ROI</button>
+        <button type="button" class="tool-btn" id="briefBtn" title="Build a customer briefing">Brief</button>
         <button type="button" class="tool-btn" id="recapBtn" title="Summarise this session">Recap</button>
-        <button type="button" class="tool-btn" id="aboutBtn" title="About Hubble">About</button>
+        <button type="button" class="tool-btn" id="aboutBtn" title="About ClientSphere">About</button>
       </div>
 
       <div class="roleplay-banner" id="roleplayBanner" hidden>
@@ -94,22 +127,16 @@
 
       <div class="messages" id="messages">
         <div class="msg bot welcome">
-          <div class="bubble">
-            <p>👋 Hey, I'm <b>Hubble</b> — your GitHub sales coach. <b>What's your name?</b> Then ask me about <b>any GitHub product</b>, pricing in multiple currencies, licensing, or let me coach you for a customer meeting.</p>
-            <div class="chips">
-              <button class="chip">Price 200 Copilot seats in USD &amp; GBP</button>
-              <button class="chip">Coach me for a CISO meeting</button>
-              <button class="chip">Explain the active committer model</button>
-              <button class="chip">Business vs Enterprise Copilot?</button>
-            </div>
+          <div class="bubble" id="welcomeBubble">
+            <p>Select a customer to load its public-intelligence adviser.</p>
           </div>
         </div>
       </div>
 
       <form class="composer" id="composer">
         <button type="button" class="mic" id="micBtn" title="Hold to talk" disabled></button>
-        <button type="button" class="stop" id="stopBtn" title="Stop Hubble speaking" hidden>Stop</button>
-        <textarea id="input" rows="1" placeholder="Ask Hubble anything about selling GitHub…"></textarea>
+        <button type="button" class="stop" id="stopBtn" title="Stop the adviser speaking" hidden>Stop</button>
+        <textarea id="input" rows="1" placeholder="Ask about the active customer..."></textarea>
         <button type="submit" class="send" id="sendBtn" title="Send"></button>
       </form>
     </section>
@@ -120,22 +147,22 @@
     <div class="modal">
       <div class="modal-head"><span>Practice roleplay</span><button class="modal-close" data-close="roleplayModal">✕</button></div>
       <div class="modal-body">
-        <p class="modal-intro">Hubble will play the customer. Pitch, handle objections, and run discovery — then hit <b>End &amp; score me</b> for a coaching scorecard.</p>
+        <p class="modal-intro">The active customer adviser will play a stakeholder. Practise discovery and positioning, then select <b>End &amp; score me</b>.</p>
         <label class="fld">Who are you selling to?
           <select id="rpPersona">
             <option value="a skeptical CISO focused on security risk, compliance and governance of AI tools">CISO — security &amp; governance</option>
             <option value="a cost-conscious CTO who cares about TCO, consolidation and developer productivity ROI">CTO — cost &amp; ROI</option>
             <option value="a VP of Engineering focused on developer velocity, cycle time and platform standardisation">VP Engineering — velocity</option>
             <option value="a procurement lead who pushes hard on discounts, terms and contract risk">Procurement — price pressure</option>
-            <option value="a developer champion who already loves GitHub but needs help building the internal business case">Developer champion</option>
+            <option value="a technical champion who sees the opportunity but needs help building the internal business case">Technical champion</option>
           </select>
         </label>
-        <label class="fld">What are you pitching?
+        <label class="fld">Conversation focus
           <select id="rpProduct">
-            <option value="GitHub Copilot (Business vs Enterprise)">GitHub Copilot</option>
-            <option value="GitHub Advanced Security (Secret Protection + Code Security)">Advanced Security</option>
-            <option value="GitHub Enterprise platform consolidation">GitHub Enterprise platform</option>
-            <option value="the full GitHub platform (land and expand)">Full platform (land &amp; expand)</option>
+            <option value="an initial strategic discovery conversation">Strategic discovery</option>
+            <option value="a cloud and AI transformation discussion">Cloud and AI transformation</option>
+            <option value="a data, analytics, and platform modernisation discussion">Data and platform modernisation</option>
+            <option value="a security, governance, and resilience discussion">Security and governance</option>
           </select>
         </label>
         <label class="fld">Difficulty
@@ -146,46 +173,6 @@
           </select>
         </label>
         <button class="modal-cta" id="rpStartBtn">Start roleplay →</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ROI calculator modal -->
-  <div class="modal-scrim" id="roiModal" hidden>
-    <div class="modal">
-      <div class="modal-head"><span>Copilot ROI calculator</span><button class="modal-close" data-close="roiModal">✕</button></div>
-      <div class="modal-body">
-        <div class="roi-grid">
-          <label class="fld">Plan
-            <select id="roiPlan">
-              <option value="19">Copilot Business — $19/seat/mo</option>
-              <option value="39">Copilot Enterprise — $39/seat/mo</option>
-            </select>
-          </label>
-          <label class="fld">Seats
-            <input id="roiSeats" type="number" min="1" value="200" />
-          </label>
-          <label class="fld">Avg developer salary (USD/yr)
-            <input id="roiSalary" type="number" min="0" step="1000" value="120000" />
-          </label>
-          <label class="fld">Productivity uplift
-            <select id="roiUplift">
-              <option value="0.10">Conservative — 10%</option>
-              <option value="0.15" selected>Typical — 15%</option>
-              <option value="0.20">Strong — 20%</option>
-            </select>
-          </label>
-          <label class="fld">Currency
-            <select id="roiCurrency">
-              <option value="USD">USD ($)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="EUR">EUR (€)</option>
-            </select>
-          </label>
-        </div>
-        <div class="roi-results" id="roiResults"></div>
-        <button class="modal-cta" id="roiCoachBtn">Ask Hubble to coach this business case</button>
-        <p class="modal-note">Productivity uplift is an assumption for modelling — validate with the customer. Pricing per the in-app reference (verified June 2026).</p>
       </div>
     </div>
   </div>
@@ -208,9 +195,9 @@
   <!-- About modal -->
   <div class="modal-scrim" id="aboutModal" hidden>
     <div class="modal about-modal">
-      <div class="modal-head"><span>About Hubble</span><button class="modal-close" data-close="aboutModal">✕</button></div>
+      <div class="modal-head"><span>About ClientSphere</span><button class="modal-close" data-close="aboutModal">✕</button></div>
       <div class="modal-body">
-        <p class="modal-intro">Hubble is an AI GitHub sales coach — deep product, pricing and licensing expertise plus live roleplay, ROI modelling and coaching, with a real‑time talking avatar. Built on Azure AI Foundry (GPT‑5.4).</p>
+        <p class="modal-intro">ClientSphere is a customer-specific public-intelligence and meeting-coaching experience with isolated Azure AI Foundry agents, cited sources, live roleplay, speech, and real-time avatars.</p>
         <div class="about-dev" id="aboutDev">
           <img id="aboutAvatar" alt="John Lunn" src="https://avatars.githubusercontent.com/u/55880472?v=4" />
           <div class="about-meta">
@@ -228,11 +215,11 @@
     </div>
   </div>
 
-  <!-- Hideaway GitHub resources drawer -->
+  <!-- Customer intelligence drawer -->
   <div class="drawer-scrim" id="drawerScrim" hidden></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-head">
-      <span>GitHub resources</span>
+      <span id="drawerTitle">Customer intelligence</span>
       <button class="drawer-close" id="drawerClose" aria-label="Close">✕</button>
     </div>
     <div class="drawer-body" id="drawerLinks"></div>

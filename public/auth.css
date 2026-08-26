@@ -1,7 +1,7 @@
 :root {
-  --bg: #0a0813; --panel: #14101f; --panel-2: #1b1630; --border: #2f2750;
-  --text: #ece9f6; --muted: #9a92b8; --accent: #8b5cf6; --accent-2: #a855f7;
-  --accent-3: #6d28d9; --green: #2ea043;
+  --bg: oklch(0.16 0.025 292); --panel: oklch(0.205 0.025 292); --panel-2: oklch(0.25 0.04 292); --border: oklch(0.36 0.065 292);
+  --text: oklch(0.94 0.015 292); --muted: oklch(0.72 0.045 292); --accent: oklch(0.66 0.2 292); --accent-2: oklch(0.72 0.2 310);
+  --accent-3: oklch(0.52 0.2 292); --green: oklch(0.65 0.19 145);
   --glow: rgba(139, 92, 246, 0.55);
   --menu-bg: linear-gradient(145deg, rgba(139, 92, 246, 0.14), rgba(139, 92, 246, 0.04));
   --menu-border: rgba(139, 92, 246, 0.38);
@@ -9,7 +9,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   background:
     radial-gradient(900px 600px at 50% -10%, #241a45 0%, rgba(36,26,69,0) 55%),
     var(--bg);
@@ -26,9 +26,8 @@ body {
   display: flex; align-items: center; justify-content: center; box-shadow: 0 0 22px rgba(124,58,237,0.5);
 }
 h1 {
-  margin: 0; font-family: "Orbitron", sans-serif; font-weight: 800; font-size: 30px; letter-spacing: 3px;
-  background: linear-gradient(90deg, #c9b6ff, #7c3aed 45%, #2f81f7); -webkit-background-clip: text;
-  background-clip: text; -webkit-text-fill-color: transparent;
+  margin: 0; font-family: inherit; font-weight: 800; font-size: 30px; letter-spacing: -0.03em;
+  color: var(--text);
 }
 .tag { margin: 6px 0 18px; color: var(--muted); font-size: 13px; }
 .blurb { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 22px; }
@@ -75,9 +74,8 @@ h1 {
   box-shadow: 0 0 26px rgba(139,92,246,0.6), inset 0 0 14px rgba(139,92,246,0.18);
 }
 h1 {
-  background: linear-gradient(90deg, #d8c9ff, #a855f7 50%, #8b5cf6);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 24px rgba(139,92,246,0.35);
+  color: var(--text);
+  text-shadow: none;
 }
 .gh-btn { transition: 0.18s; }
 .gh-btn:hover { box-shadow: 0 8px 26px -4px var(--glow); transform: translateY(-1px); }

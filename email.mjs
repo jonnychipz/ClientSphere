@@ -70,7 +70,7 @@ async function avatarBlock(user, sizePx = 56) {
 // ---------- shared chrome ----------
 function shell(innerHtml, preheader = "") {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-  <title>Hubble</title></head>
+  <title>ClientSphere</title></head>
   <body style="margin:0;padding:0;background:#0a0813;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#ece9f6;">
   <span style="display:none;opacity:0;color:#0a0813;font-size:1px;">${esc(preheader)}</span>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0813;padding:28px 12px;">
@@ -85,7 +85,7 @@ function shell(innerHtml, preheader = "") {
             </div>
           </td>
           <td style="padding-left:12px;vertical-align:middle;">
-            <div style="font-family:'Segoe UI',Arial;font-weight:800;letter-spacing:3px;font-size:22px;background:linear-gradient(90deg,#d8c9ff,${PURPLE_LT});-webkit-background-clip:text;background-clip:text;color:${PURPLE_LT};">HUBBLE</div>
+            <div style="font-family:'Segoe UI',Arial;font-weight:800;letter-spacing:-0.4px;font-size:22px;color:${PURPLE_LT};">ClientSphere</div>
             <div style="font-size:12px;color:#9a92b8;">Your AI GitHub sales coach</div>
           </td>
         </tr></table>
@@ -101,7 +101,7 @@ function shell(innerHtml, preheader = "") {
         </div>
       </td></tr>
     </table>
-    <div style="font-size:11px;color:#5b5470;margin-top:14px;">Hubble · AI GitHub sales coach · built on Azure AI Foundry</div>
+    <div style="font-size:11px;color:#5b5470;margin-top:14px;">ClientSphere · customer intelligence · built on Azure AI Foundry</div>
    </td></tr>
   </table></body></html>`;
 }
@@ -146,7 +146,7 @@ export async function emailAdminNewUser(user, approveUrl, denyUrl, appUrl) {
    </table>`;
 
   const inner = h("New access request") +
-    p(`<strong style="color:#fff;">@${esc(user.login)}</strong> just signed in to Hubble and is awaiting your approval. Here's what GitHub tells us about them:`) +
+    p(`<strong style="color:#fff;">@${esc(user.login)}</strong> just signed in to ClientSphere and is awaiting your approval. Here's what GitHub tells us about them:`) +
     card +
     `<table role="presentation" cellpadding="0" cellspacing="0"><tr>
        <td style="padding-right:10px;">${btn(approveUrl, "✓ Approve access", "primary")}</td>
@@ -154,17 +154,17 @@ export async function emailAdminNewUser(user, approveUrl, denyUrl, appUrl) {
      </tr></table>` +
     p(`<span style="font-size:12px;color:#9a92b8;">Each button opens a quick confirmation page — your decision only applies after you click <b>Confirm</b> there, so link scanners can't approve or deny on your behalf. Or manage everyone in the <a href="${appUrl}/admin" style="color:${PURPLE_LT};">admin dashboard</a>. These one-time links expire in 14 days.</span>`);
 
-  return send(ADMIN_EMAIL, `Hubble · @${user.login} requested access`, shell(inner, `${user.name} (@${user.login}) requested access to Hubble`), av.attachment ? [av.attachment] : undefined);
+  return send(ADMIN_EMAIL, `ClientSphere · @${user.login} requested access`, shell(inner, `${user.name} (@${user.login}) requested access to ClientSphere`), av.attachment ? [av.attachment] : undefined);
 }
 
 // ---------- user: request received ----------
 export async function emailUserPending(user, appUrl) {
   if (!user.email) return false;
   const inner = h(`Thanks${user.name ? ", " + esc(user.name.split(" ")[0]) : ""}! 👋`) +
-    p("Your request to use <strong style='color:#fff;'>Hubble</strong> — the AI GitHub sales coach — has been received and is <strong style='color:#c4b5fd;'>pending review</strong> by an admin.") +
+    p("Your request to use <strong style='color:#fff;'>ClientSphere</strong> has been received and is <strong style='color:#c4b5fd;'>pending review</strong> by an admin.") +
     p("You'll get another email the moment your access is approved. It's usually quick.") +
-    p(`<a href="${appUrl}" style="color:${PURPLE_LT};">Open Hubble</a> any time to check your status.`);
-  return send(user.email, "Hubble · your access request was received", shell(inner, "Your Hubble access request is pending review"));
+    p(`<a href="${appUrl}" style="color:${PURPLE_LT};">Open ClientSphere</a> any time to check your status.`);
+  return send(user.email, "ClientSphere · your access request was received", shell(inner, "Your ClientSphere access request is pending review"));
 }
 
 // ---------- user: approved / denied ----------
@@ -172,27 +172,27 @@ export async function emailUserDecision(user, decision, appUrl) {
   if (!user.email) return false;
   if (decision === "approved") {
     const inner = h("You're in! 🎉") +
-      p("Great news — your access to <strong style='color:#fff;'>Hubble</strong> has been <strong style='color:#a78bfa;'>approved</strong>. You can now sign in and start coaching.") +
-      `<div style="margin:6px 0 16px;">${btn(appUrl, "Launch Hubble", "primary")}</div>` +
+      p("Great news - your access to <strong style='color:#fff;'>ClientSphere</strong> has been <strong style='color:#a78bfa;'>approved</strong>. You can now sign in.") +
+      `<div style="margin:6px 0 16px;">${btn(appUrl, "Launch ClientSphere", "primary")}</div>` +
       p("Ask about any GitHub product, pricing in multiple currencies, or licensing — or run a live roleplay and get scored. Have fun out there.");
-    return send(user.email, "Hubble · your access is approved ✅", shell(inner, "Your Hubble access has been approved"));
+    return send(user.email, "ClientSphere · your access is approved", shell(inner, "Your ClientSphere access has been approved"));
   }
   const inner = h("Access update") +
-    p("Thanks for your interest in <strong style='color:#fff;'>Hubble</strong>. Your access request wasn't approved at this time.") +
+    p("Thanks for your interest in <strong style='color:#fff;'>ClientSphere</strong>. Your access request wasn't approved at this time.") +
     p("If you think this was a mistake or your situation changes, just reach out to the contact below and we'll take another look.");
-  return send(user.email, "Hubble · access request update", shell(inner, "An update on your Hubble access request"));
+  return send(user.email, "ClientSphere · access request update", shell(inner, "An update on your ClientSphere access request"));
 }
 
 // ---------- admin: an account was deleted (self-service or by an admin) ----------
 export async function emailAdminAccountDeleted(user, appUrl, mode = "self", byLogin = "") {
   const who = mode === "admin"
-    ? `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} was <strong style="color:#f0a35e;">removed from Hubble</strong>${byLogin ? ` by <strong style="color:#fff;">@${esc(byLogin)}</strong>` : ""}.`
-    : `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} just <strong style="color:#f0a35e;">deleted their account</strong> and removed their data from Hubble.`;
+    ? `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} was <strong style="color:#f0a35e;">removed from ClientSphere</strong>${byLogin ? ` by <strong style="color:#fff;">@${esc(byLogin)}</strong>` : ""}.`
+    : `<strong style="color:#fff;">@${esc(user.login)}</strong>${user.name ? ` (${esc(user.name)})` : ""} just <strong style="color:#f0a35e;">deleted their account</strong> and removed their data from ClientSphere.`;
   const inner = h("Account deleted") +
     p(who) +
     p(`<span style="font-size:13px;color:#9a92b8;">Email: ${user.email ? esc(user.email) : "private"} · they can sign up again any time and you'll be notified to review.</span>`) +
     `<div style="margin:6px 0 4px;">${btn(appUrl + "/admin", "Open admin dashboard", "secondary")}</div>`;
-  return send(ADMIN_EMAIL, `Hubble · @${user.login} account deleted`, shell(inner, `@${user.login} account was deleted from Hubble`));
+  return send(ADMIN_EMAIL, `ClientSphere · @${user.login} account deleted`, shell(inner, `@${user.login} account was deleted from ClientSphere`));
 }
 
 // ---------- user: confirmation that their account was deleted ----------
@@ -200,14 +200,14 @@ export async function emailUserAccountDeleted(user, appUrl, mode = "self") {
   if (!user.email) return false;
   const first = user.name ? ", " + esc(user.name.split(" ")[0]) : "";
   const inner = mode === "admin"
-    ? h("Your Hubble access was removed") +
-      p(`Hi${first}, your <strong style="color:#fff;">Hubble</strong> account and associated data have been <strong style="color:#f0a35e;">removed</strong> by an administrator.`) +
+    ? h("Your ClientSphere access was removed") +
+      p(`Hi${first}, your <strong style="color:#fff;">ClientSphere</strong> account and associated data have been <strong style="color:#f0a35e;">removed</strong> by an administrator.`) +
       p("If you believe this was a mistake or you'd like access again, just reach out to the contact below — or sign up again any time.") +
       `<div style="margin:6px 0 4px;">${btn(appUrl, "Sign up again", "secondary")}</div>`
     : h("Your account was deleted") +
-      p(`Hi${first}, this confirms your <strong style="color:#fff;">Hubble</strong> account and associated data have been <strong style="color:#a78bfa;">deleted</strong> as you requested.`) +
+      p(`Hi${first}, this confirms your <strong style="color:#fff;">ClientSphere</strong> account and associated data have been <strong style="color:#a78bfa;">deleted</strong> as you requested.`) +
       p("Sorry to see you go! You're welcome back any time — just sign up again and an admin will re-approve you.") +
-      `<div style="margin:6px 0 4px;">${btn(appUrl, "Return to Hubble", "secondary")}</div>`;
-  const subject = mode === "admin" ? "Hubble · your access has been removed" : "Hubble · your account has been deleted";
-  return send(user.email, subject, shell(inner, "Your Hubble account has been deleted"));
+      `<div style="margin:6px 0 4px;">${btn(appUrl, "Return to ClientSphere", "secondary")}</div>`;
+  const subject = mode === "admin" ? "ClientSphere · your access has been removed" : "ClientSphere · your account has been deleted";
+  return send(user.email, subject, shell(inner, "Your ClientSphere account has been deleted"));
 }

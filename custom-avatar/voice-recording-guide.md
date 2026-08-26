@@ -21,7 +21,7 @@ Mix statements, questions and exclamations. Microsoft provides starter scripts i
 - 🎙️ **Good mic**, fixed distance (a hand-span from your mouth), pop filter if possible.
 - 🎚️ **Consistent**: same mic, same room, same time of day, same energy/pace across **all** sessions **and** the consent recording.
 - 🔇 Signal-to-noise high; no background hum, typing, traffic, HVAC.
-- 🗣️ Natural, warm, "coaching" delivery — how you want Hubble to sound. Smile slightly; it carries in the voice.
+- Use a natural, warm delivery suitable for ClientSphere's meeting-coaching experience.
 - ⏸️ Leave a short silence at the start/end of each clip; re-record fluffed lines.
 
 ## Format / data requirements

@@ -1,8 +1,8 @@
-// server.mjs — Hubble backend. Serves the SPA, brokers keyless Azure Speech
+// ClientSphere backend: serves the app, routes customer-isolated Foundry agents,
+// and brokers keyless Azure Speech tokens for the browser avatar.
 // auth tokens for the browser avatar, and proxies chat to the Foundry agent.
 // Auth everywhere: DefaultAzureCredential (az login locally / managed identity in cloud).
 import "dotenv/config";
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -10,7 +10,11 @@ import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 import {
-  DEV_MODE, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
+  customers, getCustomer, customerPublicView, loadAgentMetadata,
+} from "./customer-registry.mjs";
+import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
+import {
+  DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, isAdmin, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
 } from "./auth.mjs";
 import {
@@ -26,24 +30,34 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const ENDPOINT = process.env.PROJECT_ENDPOINT;
-const AGENT_ID = process.env.AGENT_ID;
 const SPEECH_REGION = process.env.SPEECH_REGION;
 const SPEECH_STS_ENDPOINT = process.env.SPEECH_STS_ENDPOINT;
+const THREAD_TOKEN_SECRET = process.env.SESSION_SECRET;
 
-if (!ENDPOINT || !AGENT_ID) {
-  console.error("Missing PROJECT_ENDPOINT or AGENT_ID. Run `npm run setup` first.");
+if (!ENDPOINT || !SPEECH_REGION || !SPEECH_STS_ENDPOINT || !THREAD_TOKEN_SECRET) {
+  console.error("Missing PROJECT_ENDPOINT, SPEECH_REGION, SPEECH_STS_ENDPOINT, or SESSION_SECRET.");
   process.exit(1);
+}
+
+let agentMetadata;
+try {
+  agentMetadata = await loadAgentMetadata();
+} catch (error) {
+  console.error(`Could not load customer agent metadata: ${error.message}`);
+  console.error("Run `npm run setup` or set CUSTOMER_AGENT_META_PATH.");
+  process.exit(1);
+}
+for (const customer of customers) {
+  if (!agentMetadata.customers[customer.id]?.agentId) {
+    console.error(`Customer agent metadata is missing '${customer.id}'.`);
+    process.exit(1);
+  }
 }
 
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(ENDPOINT, credential);
 const agents = project.agents;
 
-// Resolve uploaded-file ids -> friendly source names for citations
-let fileMap = {};
-try {
-  fileMap = JSON.parse(fs.readFileSync(path.join(__dirname, "agent-meta.json"), "utf8")).fileMap || {};
-} catch { /* optional */ }
 const prettySource = (name) =>
   (name || "knowledge base")
     .replace(/^\d+-/, "")
@@ -68,8 +82,7 @@ const VOICES = {
   ],
 };
 
-// Avatar is rendered on a green backdrop and chroma-keyed out in the browser,
-// so any of these scene images can sit behind Hubble. Served locally from
+// Avatar is rendered on a green backdrop and chroma-keyed out in the browser.
 // /public/backgrounds, so no external dependency at runtime.
 const AVATAR_GREEN = "#00FF00FF";
 const BACKGROUNDS = [
@@ -85,27 +98,36 @@ const BACKGROUNDS = [
   { id: "skyline-night", label: "Sunset Skyline", img: "/backgrounds/10-skyline-night.jpg" },
 ];
 
-// Key GitHub (and Microsoft) resources surfaced in the hideaway drawer.
-const RESOURCES = [
-  { group: "Products & pricing", links: [
-    { icon: "tag", title: "GitHub Pricing", sub: "Plans & list prices", url: "https://github.com/pricing" },
-    { icon: "cpu", title: "GitHub Copilot", sub: "Features & plans", url: "https://github.com/features/copilot" },
-    { icon: "shield", title: "Advanced Security", sub: "Secret Protection & Code Security", url: "https://github.com/security/advanced-security" },
-    { icon: "building", title: "GitHub Enterprise", sub: "Cloud & Server", url: "https://github.com/enterprise" },
-  ]},
-  { group: "Documentation", links: [
-    { icon: "book", title: "GitHub Docs", sub: "docs.github.com", url: "https://docs.github.com" },
-    { icon: "book-open", title: "Copilot Docs", sub: "Setup, plans & billing", url: "https://docs.github.com/copilot" },
-    { icon: "card", title: "Billing & Licensing", sub: "How billing works", url: "https://docs.github.com/billing" },
-    { icon: "award", title: "Microsoft Learn — GitHub", sub: "learn.microsoft.com", url: "https://learn.microsoft.com/training/github/" },
-  ]},
-  { group: "Sell & stay current", links: [
-    { icon: "star", title: "Customer Stories", sub: "Proof points", url: "https://github.com/customer-stories" },
-    { icon: "lock", title: "GitHub Trust Center", sub: "Security & compliance", url: "https://github.com/trust-center" },
-    { icon: "map", title: "Public Roadmap", sub: "What's coming", url: "https://github.com/orgs/github/projects/4247" },
-    { icon: "rss", title: "Changelog", sub: "Latest releases", url: "https://github.blog/changelog/" },
-  ]},
-];
+function resourcesFor(customer) {
+  return [
+    {
+      group: "Customer intelligence",
+      links: customer.topics.map((topic, index) => ({
+        icon: ["building", "cpu", "map", "star", "card", "rss"][index % 6],
+        title: topic,
+        sub: `Ask the ${customer.name} adviser`,
+        prompt: `Give me an evidence-led briefing on ${topic.toLowerCase()} for ${customer.name}. Include dates and public sources.`,
+      })),
+    },
+    {
+      group: "Public sources",
+      links: [
+        {
+          icon: "link",
+          title: `${customer.name} official website`,
+          sub: customer.domain,
+          url: customer.website,
+        },
+        {
+          icon: "book-open",
+          title: "Executive customer brief",
+          sub: "Business, strategy, financials, developments, and meeting angles",
+          prompt: "[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.",
+        },
+      ],
+    },
+  ];
+}
 
 // ---- Cached Speech authorization token for the browser SDK (keyless) ----
 // Exchanges an Entra token for a 10-min Speech token via the custom-domain STS.
@@ -244,7 +266,7 @@ function requireAdmin(handler) {
 function actionPage(title, message, ok) {
   const accent = ok ? "#a78bfa" : "#f0a35e";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Hubble · ${title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>ClientSphere · ${title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 600px at 50% -10%,#241a45,#0a0813 60%);font-family:Segoe UI,Arial,sans-serif;color:#ece9f6}
   .c{width:420px;max-width:92vw;background:linear-gradient(180deg,#16111f,#0e0a18);border:1px solid rgba(139,92,246,.38);border-radius:18px;padding:34px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 50px -14px rgba(139,92,246,.55);position:relative;overflow:hidden}
   .c::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,#a78bfa,#8b5cf6,transparent)}
@@ -260,6 +282,7 @@ app.use(express.static(path.join(__dirname, "public"), { index: false }));
 // ---- auth routes ----
 app.get("/auth/login", (req, res) => {
   if (DEV_MODE) return res.redirect("/login?dev=1");
+  if (!OAUTH_CONFIGURED) return res.status(503).send("GitHub sign-in is not configured yet. <a href='/login'>Back</a>.");
   const state = makeState();
   setStateCookie(res, state, req.secure);
   res.redirect(authorizeUrl(state, redirectUri(req)));
@@ -303,7 +326,7 @@ app.post("/auth/dev", async (req, res) => {
   // Pull the real public GitHub profile (avatar etc.) so dev mode looks real.
   let profile = { login, name: login };
   try {
-    const r = await fetch(`https://api.github.com/users/${login}`, { headers: { "User-Agent": "Hubble", Accept: "application/vnd.github+json" } });
+    const r = await fetch(`https://api.github.com/users/${login}`, { headers: { "User-Agent": "ClientSphere", Accept: "application/vnd.github+json" } });
     if (r.ok) { const g = await r.json(); profile = { login: g.login, name: g.name || g.login, avatar: g.avatar_url, bio: g.bio, company: g.company, location: g.location, blog: g.blog, followers: g.followers, publicRepos: g.public_repos, htmlUrl: g.html_url, githubCreatedAt: g.created_at }; }
   } catch { /* offline ok */ }
   const isNew = !(await getUser(login));
@@ -316,7 +339,7 @@ app.post("/auth/dev", async (req, res) => {
 
 app.get("/auth/logout", (req, res) => { clearSession(res, req.secure); res.redirect("/login"); });
 
-app.get("/api/authmode", (req, res) => res.json({ devMode: DEV_MODE }));
+app.get("/api/authmode", (req, res) => res.json({ devMode: DEV_MODE, oauthConfigured: OAUTH_CONFIGURED }));
 
 app.get("/api/me", async (req, res) => {
   const u = await resolveUser(req);
@@ -421,7 +444,7 @@ function confirmActionPage(token, decision, login) {
     ? "linear-gradient(135deg,#a78bfa,#6d28d9)"
     : "linear-gradient(135deg,#f0a35e,#b4541b)";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Hubble · Confirm</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>ClientSphere · Confirm</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 600px at 50% -10%,#241a45,#0a0813 60%);font-family:Segoe UI,Arial,sans-serif;color:#ece9f6}
   .c{width:430px;max-width:92vw;background:linear-gradient(180deg,#16111f,#0e0a18);border:1px solid rgba(139,92,246,.38);border-radius:18px;padding:34px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 50px -14px rgba(139,92,246,.55);position:relative;overflow:hidden}
   .c::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,#a78bfa,#8b5cf6,transparent)}
@@ -430,7 +453,7 @@ function confirmActionPage(token, decision, login) {
   button{cursor:pointer;border:0;margin-top:14px;background:${btnBg};color:#fff;font-weight:700;font-size:15px;padding:13px 26px;border-radius:11px;font-family:Segoe UI,Arial}
   a{color:#a78bfa;text-decoration:none}</style></head>
   <body><div class="c"><h1>Confirm: ${word} access</h1>
-  <p>You're about to <b>${word}</b> Hubble access for <b>@${login}</b>.</p>
+  <p>You're about to <b>${word}</b> ClientSphere access for <b>@${login}</b>.</p>
   <form method="POST" action="/admin/action">
     <input type="hidden" name="token" value="${token}"/>
     <input type="hidden" name="d" value="${decision}"/>
@@ -526,18 +549,36 @@ function allVisibilityIds() {
 
 app.get("/api/config", async (req, res) => {
   const customList = await customAvatarsView(false);
+  const defaultCustomer = customers[0];
   res.json({
-    agentName: "Hubble",
-    tagline: "Your AI GitHub sales coach",
+    agentName: "ClientSphere",
+    tagline: "Public intelligence for every customer conversation",
     speechRegion: SPEECH_REGION,
     voices: await voicesView(),
     backgrounds: BACKGROUNDS,
-    resources: RESOURCES,
+    customers: customers.map(customerPublicView),
+    defaultCustomerId: defaultCustomer.id,
+    resources: resourcesFor(defaultCustomer),
     // Back-compat: `custom` is the first visible custom avatar (older client);
     // `customAvatars` is the full visible list (new client).
     custom: customList[0] || null,
     customAvatars: customList,
     avatarGreen: AVATAR_GREEN,
+  });
+});
+
+app.get("/api/customers/:customerId", requireApproved(async (req, res) => {
+  const customer = getCustomer(req.params.customerId);
+  if (!customer) return res.status(404).json({ error: "Unknown customer" });
+  res.json({ customer: customerPublicView(customer), resources: resourcesFor(customer) });
+}));
+
+app.get("/healthz", (req, res) => {
+  res.json({
+    status: "ok",
+    app: "ClientSphere",
+    customers: customers.length,
+    agentsConfigured: Object.keys(agentMetadata.customers).length,
   });
 });
 
@@ -583,7 +624,7 @@ app.get("/api/relay-token", requireApproved(async (req, res) => {
 }));
 
 // Extract assistant text + citations from the latest assistant message
-function renderAssistantMessage(msg) {
+function renderAssistantMessage(msg, fileMap) {
   let text = "";
   const citations = [];
   const seen = new Set();
@@ -612,8 +653,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Run the agent and resolve any function tool calls (live web grounding) until
 // the run reaches a terminal state.
-async function runAgent(tid) {
-  let run = await agents.runs.create(tid, AGENT_ID);
+async function runAgent(tid, agentId, customer) {
+  let run = await agents.runs.create(tid, agentId);
   for (let i = 0; i < 60; i++) {
     if (["queued", "in_progress", "cancelling"].includes(run.status)) {
       await sleep(800);
@@ -627,7 +668,7 @@ async function runAgent(tid) {
         const fn = c.function || c.functionDetails;
         let output = `Error: unknown tool '${fn?.name}'.`;
         if (fn?.name === FETCH_DOC_TOOL.name) {
-          output = await fetchOfficialDoc(fn.arguments);
+          output = await fetchOfficialDoc(fn.arguments, customer);
         }
         outputs.push({ toolCallId: c.id, output });
       }
@@ -640,12 +681,27 @@ async function runAgent(tid) {
 }
 
 app.post("/api/chat", requireApproved(async (req, res) => {
-  const { message, threadId } = req.body || {};
+  const { message, threadId, customerId } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
+  const customer = getCustomer(customerId);
+  if (!customer) return res.status(400).json({ error: "valid customerId required" });
+  const customerAgent = agentMetadata.customers[customer.id];
   try {
-    const tid = threadId || (await agents.threads.create()).id;
+    let tid;
+    if (threadId) {
+      tid = verifyThreadToken(
+        threadId,
+        { customerId: customer.id, userLogin: req.authUser.login },
+        THREAD_TOKEN_SECRET,
+      );
+      if (!tid) {
+        return res.status(409).json({ error: "Conversation belongs to a different customer. Start a new conversation." });
+      }
+    } else {
+      tid = (await agents.threads.create()).id;
+    }
     await agents.messages.create(tid, "user", message);
-    const run = await runAgent(tid);
+    const run = await runAgent(tid, customerAgent.agentId, customer);
     if (run.status !== "completed") {
       return res.status(502).json({ error: `Run ${run.status}`, detail: run.lastError?.message || run.lastError?.code });
     }
@@ -653,12 +709,23 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     const list = agents.messages.list(tid, { order: "desc", limit: 10 });
     let reply = "", citations = [];
     for await (const m of list) {
-      if (m.role === "assistant") { ({ text: reply, citations } = renderAssistantMessage(m)); break; }
+      if (m.role === "assistant") {
+        ({ text: reply, citations } = renderAssistantMessage(m, customerAgent.fileMap || {}));
+        break;
+      }
     }
     // Capture usage (don't log raw system directives verbatim — just the kind).
     const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
-    logUsage(req.authUser.login, "chat", kind);
-    res.json({ threadId: tid, reply, citations });
+    logUsage(req.authUser.login, "chat", `${customer.id}:${kind}`);
+    res.json({
+      threadId: createThreadToken(
+        { customerId: customer.id, threadId: tid, userLogin: req.authUser.login },
+        THREAD_TOKEN_SECRET,
+      ),
+      customerId: customer.id,
+      reply,
+      citations,
+    });
   } catch (err) {
     console.error("chat error:", err);
     res.status(500).json({ error: "Chat failed", detail: err.message });
@@ -667,8 +734,8 @@ app.post("/api/chat", requireApproved(async (req, res) => {
 
 await initStore();
 app.listen(PORT, () => {
-  console.log(`\n🛰  Hubble running at http://localhost:${PORT}`);
-  console.log(`   Agent: ${AGENT_ID}`);
+  console.log(`\nClientSphere running at http://localhost:${PORT}`);
+  console.log(`   Customer agents: ${customers.length}`);
   console.log(`   Speech region: ${SPEECH_REGION} (keyless AAD)`);
   console.log(`   Auth: ${DEV_MODE ? "DEV MODE (no OAuth App) — simulated GitHub login" : "GitHub OAuth"} | admins: ${ADMIN_LOGINS.join(", ")}`);
   console.log(`   Email: ${EMAIL_ENABLED ? "ACS enabled" : "disabled (no ACS config)"}`);

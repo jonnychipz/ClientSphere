@@ -1,6 +1,6 @@
-# Hubble — Custom Avatar & Voice (your likeness)
+# ClientSphere - Custom Avatar and Voice
 
-This folder is the complete kit to turn **your photo and your voice** into Hubble's avatar, using Azure AI Speech. The app is **already wired** for it — once your custom assets are trained and deployed, you flip a few values in `.env` and a **"⭐ You (custom)"** option appears in the Voice & body picker.
+This folder is the kit for adding an approved Jonnychipz photo avatar and voice to ClientSphere through Azure AI Speech. The application is already wired for it, but the feature is disabled until those assets are available.
 
 > ⚠️ **Both features are Limited Access (Responsible AI gated).** You must apply and be approved, and prove consent. This is not instant self-serve. Plan for **days** (photo avatar) to **weeks** (professional voice).
 
@@ -39,11 +39,11 @@ This folder is the complete kit to turn **your photo and your voice** into Hubbl
 
 | Need | Use |
 |------|-----|
-| Foundry/Speech resource | **`hubble-foundry`** — S0, Sweden Central, custom domain (already used by this app) |
+| Foundry/Speech resource | **`clientsphere-ai-95bc`** - S0, Sweden Central |
 | Region | **Sweden Central** (confirm it's in the custom-avatar *training* region list when you start; if not, create an S0 resource in a supported region and point `.env` at its STS endpoint) |
 | ❌ Not this one | `speech-avatar-jl` is **F0 (free)** — custom features need **S0** |
 
-> The app authenticates to Speech **keyless** via `hubble-foundry`'s custom-domain STS, so a custom voice/avatar deployed on that resource needs no key changes.
+> The app authenticates to Speech keylessly through `clientsphere-ai-95bc`. Train and deploy custom assets on that same resource.
 
 ---
 

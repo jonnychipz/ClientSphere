@@ -1,6 +1,6 @@
 # Submission & training guide (Microsoft Foundry)
 
-End-to-end steps from approval to a working "⭐ You (custom)" in Hubble.
+End-to-end steps from approval to a working custom option in ClientSphere.
 
 ## 0. Apply for Limited Access (do this first)
 1. Go to **https://aka.ms/customneural** and complete the intake form for **Custom Neural Voice** and/or **Custom Avatar**.
@@ -10,7 +10,7 @@ End-to-end steps from approval to a working "⭐ You (custom)" in Hubble.
 > Until approved, use the **Interim look-alike**: pick the closest standard voice + avatar in the app today.
 
 ## 1. Confirm resource & region
-- Use **`hubble-foundry`** (S0, Sweden Central, custom domain).
+- Use **`clientsphere-ai-95bc`** (S0, Sweden Central, custom domain).
 - Verify Sweden Central is in the custom-avatar **training** region list:
   https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/what-is-custom-text-to-speech-avatar#available-locations
 - If not supported there, create a new **S0** AI Services/Speech resource in a supported region, give it a **custom subdomain**, and update `.env`:
@@ -38,7 +38,7 @@ End-to-end steps from approval to a working "⭐ You (custom)" in Hubble.
 3. **Add training data**: upload your recordings + transcripts (see `voice-recording-guide.md`).
 4. **Train**, then **Deploy** the model to an endpoint. The deployed voice name → `CUSTOM_VOICE_NAME`.
 
-## 4. Wire it into Hubble
+## 4. Wire it into ClientSphere
 Edit `.env` (root of this repo):
 ```ini
 CUSTOM_AVATAR_ENABLED=true
@@ -53,7 +53,7 @@ Then restart:
 ```powershell
 npm start
 ```
-Open http://localhost:3000, turn the voice assistant **On**, and pick **⭐ You (custom)** in **Voice & body**. Hubble now speaks and looks like you.
+Open http://localhost:3000, turn the voice assistant **On**, and pick the custom option in **Voice & body**.
 
 ## 5. Validate
 - Avatar starts within a few seconds (status → **live**).

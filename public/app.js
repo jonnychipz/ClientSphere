@@ -1,10 +1,10 @@
-// app.js — Hubble client: chat + real-time talking avatar + speech-to-text.
+// ClientSphere client: customer switching, Foundry chat, avatar, and speech.
 const SDK = window.SpeechSDK;
 
 // ---- Monochrome purple icon set (stroke = currentColor) ----
 const ICON_PATHS = {
   roleplay: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-  roi: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  brief: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
   recap: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>',
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
@@ -54,7 +54,7 @@ const els = {
   drawerClose: document.getElementById("drawerClose"),
   drawerLinks: document.getElementById("drawerLinks"),
   roleplayBtn: document.getElementById("roleplayBtn"),
-  roiBtn: document.getElementById("roiBtn"),
+  briefBtn: document.getElementById("briefBtn"),
   recapBtn: document.getElementById("recapBtn"),
   roleplayBanner: document.getElementById("roleplayBanner"),
   roleplayLabel: document.getElementById("roleplayLabel"),
@@ -65,11 +65,24 @@ const els = {
   status: document.getElementById("avatarStatus"),
   speakingBar: document.getElementById("speakingBar"),
   tagline: document.getElementById("tagline"),
+  customerPopover: document.getElementById("customerPopover"),
+  customerSearch: document.getElementById("customerSearch"),
+  customerOptions: document.getElementById("customerOptions"),
+  customerCount: document.getElementById("customerCount"),
+  customerLogo: document.getElementById("customerLogo"),
+  customerInitials: document.getElementById("customerInitials"),
+  customerName: document.getElementById("customerName"),
+  customerSector: document.getElementById("customerSector"),
+  avatarIdleCopy: document.getElementById("avatarIdleCopy"),
+  welcomeBubble: document.getElementById("welcomeBubble"),
+  drawerTitle: document.getElementById("drawerTitle"),
   toast: document.getElementById("toast"),
 };
 
 const state = {
   cfg: null,
+  customer: null,
+  resources: [],
   threadId: null,
   gender: "female",
   voice: null,
@@ -96,6 +109,7 @@ const state = {
   userName: null,
   greeted: false,
   endCall: false,
+  generation: 0,
 };
 
 // ---------- helpers ----------
@@ -200,6 +214,7 @@ function isEndingIntent(text) {
 }
 
 async function runChat(prompt, opts = {}) {
+  const generation = state.generation;
   state.busy = true;
   const typing = opts.onReply ? null : addTyping();
   els.sendBtn.disabled = true;
@@ -207,9 +222,17 @@ async function runChat(prompt, opts = {}) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: prompt, threadId: state.threadId }),
+      body: JSON.stringify({
+        message: prompt,
+        threadId: state.threadId,
+        customerId: state.customer?.id,
+      }),
     });
     const data = await res.json();
+    if (generation !== state.generation) {
+      if (typing) typing.remove();
+      return;
+    }
     if (typing) typing.remove();
     if (!res.ok) {
       if (opts.onReply) opts.onReply({ error: data.error || "Something went wrong." });
@@ -225,9 +248,11 @@ async function runChat(prompt, opts = {}) {
     }
   } catch (err) {
     if (typing) typing.remove();
+    if (generation !== state.generation) return;
     if (opts.onReply) opts.onReply({ error: err.message });
     else addMessage("bot", "⚠️ Network error: " + err.message);
   } finally {
+    if (generation !== state.generation) return;
     state.busy = false;
     els.sendBtn.disabled = false;
     els.input.focus();
@@ -239,12 +264,11 @@ async function runChat(prompt, opts = {}) {
   }
 }
 
-// First-contact greeting: Hubble introduces itself and asks the seller's name,
-// then (via speak → auto-listen) opens the mic so they can just answer aloud.
+// First-contact greeting for the active customer adviser.
 function kickoffGreeting() {
   if (state.greeted) return;
   state.greeted = true;
-  dispatch("[SYSTEM: The seller just turned on voice mode and hasn't spoken yet. Greet them warmly in one or two short sentences and ask their first name. Don't cover anything else yet.]", {});
+  dispatch(`[SYSTEM: The user just turned on voice mode for ${state.customer.name}. Greet them in one or two short sentences, identify yourself as the ${state.customer.name} public-intelligence adviser, and ask what they are preparing for.]`, {});
 }
 
 // Strip citation markers / markdown so the avatar speaks naturally
@@ -440,10 +464,10 @@ async function setVoiceOn(on) {
   if (on) {
     try {
       state.endCall = false;
-      toast("Waking Hubble's avatar… this can take a few seconds.");
+      toast("Starting the ClientSphere avatar. This can take a few seconds.");
       await startAvatar();
       els.micBtn.disabled = false;
-      toast("Voice assistant is live. Hubble will say hello — just talk back.");
+      toast("Voice assistant is live. The customer adviser will say hello.");
       kickoffGreeting(); // greet + ask name, then auto-open the mic
     } catch (e) {
       console.error(e);
@@ -606,7 +630,7 @@ function clearBackdrop() {
 function selectBackground(bg) {
   state.background = bg;
   [...els.bgSwatches.children].forEach((s) => s.classList.toggle("active", s.dataset.id === bg.id));
-  try { localStorage.setItem("hubble.bg", bg.id); } catch {}
+  try { localStorage.setItem("clientsphere.bg", bg.id); } catch {}
   if (state.avatarLive) applyBackdrop(); // only visible while the avatar is shown
 }
 function renderBackgrounds() {
@@ -624,7 +648,7 @@ function renderBackgrounds() {
   // Restore last choice, otherwise randomise for this load.
   let chosen = null;
   try {
-    const saved = localStorage.getItem("hubble.bg");
+    const saved = localStorage.getItem("clientsphere.bg");
     if (saved) chosen = list.find((x) => x.id === saved);
   } catch {}
   if (!chosen && list.length) chosen = list[Math.floor(Math.random() * list.length)];
@@ -634,9 +658,123 @@ function showBgPicker(show) {
   els.bgPicker.hidden = !show;
 }
 
-// ---------- GitHub resources drawer ----------
+// ---------- customer selection and intelligence drawer ----------
+function setCustomerLogo(customer) {
+  els.customerInitials.textContent = customer.initials;
+  els.customerInitials.hidden = false;
+  els.customerLogo.hidden = true;
+  els.customerLogo.onload = () => {
+    els.customerLogo.hidden = false;
+    els.customerInitials.hidden = true;
+  };
+  els.customerLogo.onerror = () => {
+    els.customerLogo.hidden = true;
+    els.customerInitials.hidden = false;
+  };
+  els.customerLogo.src = customer.logoUrl;
+  els.customerLogo.alt = `${customer.name} logo`;
+}
+
+function renderWelcome() {
+  const customer = state.customer;
+  els.messages.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot welcome";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.id = "welcomeBubble";
+  els.welcomeBubble = bubble;
+  const intro = document.createElement("p");
+  intro.innerHTML = `ClientSphere is focused on <b>${escapeHtml(customer.name)}</b>. Ask about the business, products, strategy, public financial reporting, leadership, initiatives, or recent developments.`;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  customer.topics.slice(0, 4).forEach((topic) => {
+    const button = document.createElement("button");
+    button.className = "chip";
+    button.type = "button";
+    button.textContent = topic;
+    button.addEventListener("click", () => sendMessage(`Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`));
+    chips.appendChild(button);
+  });
+  bubble.append(intro, chips);
+  wrap.appendChild(bubble);
+  els.messages.appendChild(wrap);
+}
+
+function renderCustomerOptions(query = "") {
+  const needle = query.trim().toLowerCase();
+  const matches = state.cfg.customers.filter((customer) =>
+    [customer.name, customer.sector, customer.domain].some((value) => value.toLowerCase().includes(needle))
+  );
+  els.customerOptions.innerHTML = "";
+  for (const customer of matches) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "customer-option";
+    button.setAttribute("role", "option");
+    button.setAttribute("aria-selected", String(customer.id === state.customer?.id));
+
+    const logo = document.createElement("span");
+    logo.className = "customer-option-logo";
+    const img = document.createElement("img");
+    img.src = customer.logoUrl;
+    img.alt = "";
+    const fallback = document.createElement("span");
+    fallback.textContent = customer.initials;
+    img.onload = () => { fallback.hidden = true; };
+    img.onerror = () => { img.hidden = true; fallback.hidden = false; };
+    logo.append(img, fallback);
+
+    const copy = document.createElement("span");
+    copy.className = "customer-option-copy";
+    const name = document.createElement("strong");
+    name.textContent = customer.name;
+    const meta = document.createElement("span");
+    meta.textContent = `${customer.sector} - ${customer.domain}`;
+    copy.append(name, meta);
+    button.append(logo, copy);
+    button.addEventListener("click", () => selectCustomer(customer.id));
+    els.customerOptions.appendChild(button);
+  }
+  els.customerCount.textContent = `${matches.length} of ${state.cfg.customers.length}`;
+}
+
+async function selectCustomer(customerId, options = {}) {
+  const customer = state.cfg.customers.find((item) => item.id === customerId);
+  if (!customer) return;
+  interruptAvatar();
+  stopListening();
+  state.generation += 1;
+  state.busy = false;
+  state.threadId = null;
+  state.pending = null;
+  state.greeted = false;
+  state.roleplayActive = false;
+  els.roleplayBanner.hidden = true;
+
+  const generation = state.generation;
+  const response = await fetch(`/api/customers/${encodeURIComponent(customer.id)}`);
+  const data = await response.json();
+  if (generation !== state.generation) return;
+  if (!response.ok) throw new Error(data.error || "Could not load customer.");
+  state.customer = data.customer;
+  state.resources = data.resources;
+  setCustomerLogo(state.customer);
+  els.customerName.textContent = state.customer.name;
+  els.customerSector.textContent = state.customer.sector;
+  els.avatarIdleCopy.textContent = `Turn on voice to talk with the ${state.customer.name} adviser.`;
+  els.input.placeholder = `Ask about ${state.customer.name}...`;
+  els.drawerTitle.textContent = `${state.customer.name} intelligence`;
+  renderWelcome();
+  renderResources();
+  renderCustomerOptions(els.customerSearch.value);
+  try { localStorage.setItem("clientsphere.customer", state.customer.id); } catch {}
+  if (els.customerPopover.matches(":popover-open")) els.customerPopover.hidePopover();
+  if (options.announce !== false) toast(`${state.customer.name} adviser loaded. New conversation started.`);
+}
+
 function renderResources() {
-  const groups = state.cfg.resources || [];
+  const groups = state.resources || [];
   els.drawerLinks.innerHTML = "";
   groups.forEach((grp) => {
     const lbl = document.createElement("div");
@@ -644,13 +782,21 @@ function renderResources() {
     lbl.textContent = grp.group;
     els.drawerLinks.appendChild(lbl);
     grp.links.forEach((l) => {
-      const a = document.createElement("a");
-      a.className = "drawer-link";
-      a.href = l.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.innerHTML = `<span class="dl-ico">${icon(l.icon, 18)}</span><span><span class="dl-title">${l.title}</span><span class="dl-sub">${l.sub}</span></span>`;
-      els.drawerLinks.appendChild(a);
+      const item = document.createElement(l.url ? "a" : "button");
+      item.className = "drawer-link";
+      if (l.url) {
+        item.href = l.url;
+        item.target = "_blank";
+        item.rel = "noopener noreferrer";
+      } else {
+        item.type = "button";
+        item.addEventListener("click", () => {
+          openDrawer(false);
+          dispatch(l.prompt, { userText: l.title });
+        });
+      }
+      item.innerHTML = `<span class="dl-ico">${icon(l.icon, 18)}</span><span><span class="dl-title">${l.title}</span><span class="dl-sub">${l.sub}</span></span>`;
+      els.drawerLinks.appendChild(item);
     });
   });
 }
@@ -678,8 +824,8 @@ function startRoleplay() {
   els.roleplayLabel.textContent = `Roleplay: ${personaLabel}`;
   els.roleplayBanner.hidden = false;
   const directive =
-    `[[ROLEPLAY_START]] Enter roleplay mode now. You are no longer the coach — you ARE the customer: ${persona}. ` +
-    `The seller is pitching ${product}. Be ${difficulty}. Stay fully in character as the customer, speak in first person, ` +
+    `[[ROLEPLAY_START]] Enter roleplay mode for ${state.customer.name}. You are no longer the coach - you are ${persona} at ${state.customer.name}. ` +
+    `The user is leading ${product}. Be ${difficulty}. Stay fully in character, speak in first person, ` +
     `react realistically, raise objections, and ask pointed questions. Keep each turn short and conversational. ` +
     `Do NOT coach or break character until you receive [[ROLEPLAY_SCORE]]. Open with a brief, in-character greeting that sets the scene.`;
   dispatch(directive, { userText: `Starting roleplay — ${personaLabel}` });
@@ -689,52 +835,9 @@ function endRoleplayAndScore() {
   state.roleplayActive = false;
   els.roleplayBanner.hidden = true;
   const directive =
-    `[[ROLEPLAY_SCORE]] Roleplay over — break character and become Hubble the coach again. Score the seller's performance ` +
-    `in this roleplay. Give a short scorecard with ratings out of 5 for: Discovery, Value & positioning, Objection handling, ` +
-    `and Next-step / close. Then 2–3 specific things they did well and 2–3 concrete improvements. Keep it punchy and encouraging.`;
+    `[[ROLEPLAY_SCORE]] Roleplay over - break character and become the ClientSphere coach again. Score the user's performance ` +
+    `for Discovery, Customer relevance, Use of evidence, Objection handling, and Next-step quality. Give specific strengths and improvements.`;
   dispatch(directive, { userText: "End & score me" });
-}
-
-// ---------- ROI calculator ----------
-const FX = { USD: 1, GBP: 0.79, EUR: 0.92 };
-const SYM = { USD: "$", GBP: "£", EUR: "€" };
-function fmtMoney(usd, cur) {
-  const v = usd * (FX[cur] || 1);
-  return SYM[cur] + Math.round(v).toLocaleString("en-US");
-}
-function computeRoi() {
-  const seat = Number(document.getElementById("roiPlan").value);
-  const seats = Math.max(1, Number(document.getElementById("roiSeats").value) || 0);
-  const salary = Math.max(0, Number(document.getElementById("roiSalary").value) || 0);
-  const uplift = Number(document.getElementById("roiUplift").value);
-  const cur = document.getElementById("roiCurrency").value;
-  const annualCost = seat * seats * 12;
-  const annualValue = salary * uplift * seats;
-  const net = annualValue - annualCost;
-  const roiX = annualCost > 0 ? annualValue / annualCost : 0;
-  const paybackWeeks = annualValue > 0 ? (annualCost / annualValue) * 52 : 0;
-  const rows = [
-    ["Annual Copilot cost", fmtMoney(annualCost, cur), false],
-    ["Est. annual productivity value", fmtMoney(annualValue, cur), false],
-    ["Net annual benefit", fmtMoney(net, cur), false],
-    ["Payback", paybackWeeks < 52 ? `${paybackWeeks.toFixed(1)} weeks` : `${(paybackWeeks / 52).toFixed(1)} yrs`, false],
-    ["Return on investment", `${roiX.toFixed(1)}× (${Math.round((roiX - 1) * 100)}% ROI)`, true],
-  ];
-  document.getElementById("roiResults").innerHTML = rows
-    .map(([k, v, hl]) => `<div class="roi-row${hl ? " headline" : ""}"><span class="k">${k}</span><span class="v">${v}</span></div>`)
-    .join("");
-  return { seat, seats, salary, uplift, cur, annualCost, annualValue, net, roiX, paybackWeeks };
-}
-function roiCoachPrompt() {
-  const r = computeRoi();
-  const planName = document.getElementById("roiPlan").selectedOptions[0].text;
-  openModal("roiModal", false);
-  const msg =
-    `I've modelled a Copilot business case: ${r.seats} seats on ${planName}, ` +
-    `assuming a ${Math.round(r.uplift * 100)}% productivity uplift on a ${SYM[r.cur]}${Math.round(r.salary * (FX[r.cur] || 1)).toLocaleString()} average developer salary. ` +
-    `That's ${fmtMoney(r.annualCost, r.cur)}/yr cost vs ${fmtMoney(r.annualValue, r.cur)}/yr value (${r.roiX.toFixed(1)}× ROI). ` +
-    `Coach me on how to present this business case to the customer — what to emphasise, what to validate, and the next step.`;
-  dispatch(msg, { userText: "Coach my ROI business case" });
 }
 
 // ---------- Session recap ----------
@@ -744,7 +847,7 @@ function openRecap() {
   document.getElementById("recapActions").hidden = true;
   const directive =
     "[[SESSION_RECAP]] Produce a concise written recap of THIS session for the seller to keep. " +
-    "Use plain text with short sections: Topics covered, Key facts & numbers, Action items, and Useful links (official GitHub/Microsoft URLs). " +
+    "Use plain text with short sections: Topics covered, Evidence used, Open questions, Action items, and Public source links. " +
     "Be specific to what we actually discussed. This is for reading, not speaking.";
   dispatch(directive, {
     userText: null,
@@ -762,12 +865,12 @@ function downloadRecap() {
   const blob = new Blob([state.lastRecap || ""], { type: "text/markdown" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `hubble-recap-${new Date().toISOString().slice(0, 10)}.md`;
+  a.download = `clientsphere-${state.customer.id}-recap-${new Date().toISOString().slice(0, 10)}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
 function emailRecap() {
-  const subject = encodeURIComponent("Hubble session recap — GitHub coaching");
+  const subject = encodeURIComponent(`ClientSphere recap - ${state.customer.name}`);
   const body = encodeURIComponent(state.lastRecap || "");
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
@@ -828,7 +931,7 @@ function escHtml(s) {
 }
 
 async function deleteMyAccount() {
-  if (!confirm("Delete your Hubble account? This removes your access and data. The admin will be notified. You can sign up again later.")) return;
+  if (!confirm("Delete your ClientSphere account? This removes your access and data. The admin will be notified. You can sign up again later.")) return;
   try {
     const r = await fetch("/api/me/delete", { method: "POST" });
     const d = await r.json();
@@ -840,7 +943,7 @@ async function deleteMyAccount() {
 // ---------- init ----------
 function paintIcons() {
   els.roleplayBtn.innerHTML = icon("roleplay") + "<span>Roleplay</span>";
-  els.roiBtn.innerHTML = icon("roi") + "<span>ROI</span>";
+  els.briefBtn.innerHTML = icon("brief") + "<span>Brief</span>";
   els.recapBtn.innerHTML = icon("recap") + "<span>Recap</span>";
   document.getElementById("aboutBtn").innerHTML = icon("info") + "<span>About</span>";
   els.micBtn.innerHTML = icon("mic", 20);
@@ -857,6 +960,11 @@ async function init() {
   state.cfg = await r.json();
   state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
+  renderCustomerOptions();
+  let savedCustomer = state.cfg.defaultCustomerId;
+  try { savedCustomer = localStorage.getItem("clientsphere.customer") || savedCustomer; } catch {}
+  if (!state.cfg.customers.some((customer) => customer.id === savedCustomer)) savedCustomer = state.cfg.defaultCustomerId;
+  await selectCustomer(savedCustomer, { announce: false });
   populateVoices();
   renderBackgrounds(); // randomises on first load (applied when avatar is shown)
   renderResources();
@@ -878,10 +986,15 @@ async function init() {
     if (b) setGender(b.dataset.gender);
   });
   els.voiceSelect.addEventListener("change", () => { setVoice(els.voiceSelect.value); });
-  document.querySelectorAll(".chip").forEach((c) =>
-    c.addEventListener("click", () => sendMessage(c.textContent))
-  );
-  // GitHub resources drawer
+  els.customerSearch.addEventListener("input", () => renderCustomerOptions(els.customerSearch.value));
+  els.customerPopover.addEventListener("toggle", (event) => {
+    if (event.newState === "open") {
+      els.customerSearch.value = "";
+      renderCustomerOptions();
+      setTimeout(() => els.customerSearch.focus(), 0);
+    }
+  });
+  // Customer intelligence drawer
   els.drawerToggle.addEventListener("click", () => openDrawer(true));
   els.drawerClose.addEventListener("click", () => openDrawer(false));
   els.drawerScrim.addEventListener("click", () => openDrawer(false));
@@ -889,20 +1002,18 @@ async function init() {
 
   // Feature toolbar
   els.roleplayBtn.addEventListener("click", () => openModal("roleplayModal", true));
-  els.roiBtn.addEventListener("click", () => { openModal("roiModal", true); computeRoi(); });
+  els.briefBtn.addEventListener("click", () =>
+    dispatch("[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.", { userText: "Build customer brief", speak: false })
+  );
   els.recapBtn.addEventListener("click", openRecap);
   document.getElementById("aboutBtn").addEventListener("click", () => openModal("aboutModal", true));
   els.roleplayEndBtn.addEventListener("click", endRoleplayAndScore);
   document.getElementById("rpStartBtn").addEventListener("click", startRoleplay);
-  document.getElementById("roiCoachBtn").addEventListener("click", roiCoachPrompt);
   document.getElementById("recapCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText(state.lastRecap || "").then(() => toast("Recap copied to clipboard."));
   });
   document.getElementById("recapDownloadBtn").addEventListener("click", downloadRecap);
   document.getElementById("recapEmailBtn").addEventListener("click", emailRecap);
-  ["roiPlan", "roiSeats", "roiSalary", "roiUplift", "roiCurrency"].forEach((id) =>
-    document.getElementById(id).addEventListener("input", computeRoi)
-  );
   // Modal close buttons + scrim click
   document.querySelectorAll(".modal-close").forEach((b) =>
     b.addEventListener("click", () => openModal(b.dataset.close, false))

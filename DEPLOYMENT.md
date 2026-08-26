@@ -1,61 +1,57 @@
-# Deployment — Hubble on Azure (CI/CD via GitHub Actions)
+# Deployment
 
-Hubble is deployed to **Azure App Service (Linux, Node 22)** and ships automatically on every push to `main` via **GitHub Actions**.
+ClientSphere uses GitHub Actions OIDC and Bicep. No publish profile or Azure client secret is stored in GitHub.
 
-## Live environment
+## One-time identity bootstrap
 
-| Thing | Value |
-|-------|-------|
-| URL | https://hubble-coach-kehfuc.azurewebsites.net |
-| Repo | https://github.com/jonnychipz/Hubble (private) |
-| Resource group | `hubble-rg` (Sweden Central) |
-| Compute | App Service plan `hubble-plan` (Linux B1) + Web App `hubble-coach-kehfuc` |
-| Identity | System-assigned **managed identity** → keyless access to `hubble-foundry` |
-| AI backend | Foundry project `hubble-proj` (gpt-5.4) + Speech STS, both in `rg-hubble` |
+Run:
 
-> **Why App Service?** Hubble is a single Node/Express app that serves the SPA, brokers short-lived Speech tokens, and calls the Foundry agent. It needs a managed identity and outbound HTTPS — no container orchestration, queues or GPUs — so App Service (Linux) is the simplest, cheapest fit. Container Apps would be the next step up if we later need scale-to-zero or multiple microservices.
+```powershell
+.\scripts\bootstrap-github-oidc.ps1
+```
 
-## How auth works in the cloud (keyless)
-The Web App's **managed identity** is granted **Cognitive Services User** + **Cognitive Services OpenAI User** on the `hubble-foundry` account. The app uses `DefaultAzureCredential`, which on App Service resolves to that managed identity — so it mints Foundry + Speech tokens at runtime with **no API keys stored anywhere**.
+This creates `id-github-clientsphere-95bc` in `rg-clientsphere-identity-95bc`, adds a GitHub environment federated credential, grants deployment permissions, and writes the required GitHub variables. This is the only local Azure bootstrap; the managed identity is the trust anchor that lets the first workflow run.
 
-## CI/CD pipeline (`.github/workflows/deploy.yml`)
-On push to `main` (or manual `workflow_dispatch`):
-1. **build** — `npm ci`, syntax-check all server/client JS, zip a release artifact.
-2. **deploy** — `azure/webapps-deploy@v3` pushes the zip to App Service using the **publish-profile** GitHub secret.
+## Provisioned resources
 
-### GitHub secrets / variables
-| Name | Type | Purpose |
-|------|------|---------|
-| `AZURE_WEBAPP_PUBLISH_PROFILE` | secret | App Service deploy credentials |
-| `AZURE_WEBAPP_NAME` | variable | Target web app name |
-| `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET` | secret | OAuth app creds (mirror; set by `set-oauth.ps1`) |
+The `infra/main.bicep` deployment creates:
 
-> Azure deploy uses a **publish profile** (not OIDC) because the sandbox tenant blocks app-registration creation for guest accounts. To switch to OIDC later, create an app registration + federated credential and swap the deploy step to `azure/login` with `client-id`/`tenant-id`/`subscription-id`.
+| Resource | Name |
+|---|---|
+| Resource group | `rg-clientsphere-95bc` |
+| Azure AI Services / Foundry | `clientsphere-ai-95bc` |
+| Foundry project | `clientsphere-project` |
+| GPT deployment | `gpt-5.4` |
+| App Service | `clientsphere-95bc` |
+| Linux App Service plan | `asp-clientsphere-95bc` |
+| Storage | `stclientsphere95bc` |
+| Key Vault | `kv-clientsphere-95bc` |
+| Application Insights | `appi-clientsphere-95bc` |
+| Log Analytics | `log-clientsphere-95bc` |
 
-## Runtime configuration (App Service application settings)
-Set on the Web App (encrypted at rest) — not in code:
-`PROJECT_ENDPOINT`, `MODEL_DEPLOYMENT`, `SPEECH_REGION`, `SPEECH_STS_ENDPOINT`,
-`AGENT_ID`, `VECTOR_STORE_ID`, `ADMIN_LOGINS=jonnychipz`, `SESSION_SECRET`,
-`AUTH_DEV_MODE`, and (after OAuth setup) `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.
+The web app uses managed identity for Foundry, Speech, Blob, Table Storage, and Key Vault.
 
-## ⚠️ One manual step: create the GitHub OAuth App
-There is **no API** to create a GitHub OAuth App, so this is the only manual step. Until it's done, the deployed app falls back to **dev-mode login** (simulated usernames).
+## Deployment workflow
 
-1. Go to **https://github.com/settings/applications/new** (signed in as **jonnychipz**).
-2. Fill in:
-   - **Application name:** `Hubble — GitHub Sales Coach`
-   - **Homepage URL:** `https://hubble-coach-kehfuc.azurewebsites.net`
-   - **Authorization callback URL:** `https://hubble-coach-kehfuc.azurewebsites.net/auth/callback`
-3. **Register application**, then **Generate a new client secret**.
-4. From the repo root, run:
-   ```powershell
-   ./set-oauth.ps1 -ClientId "<client id>" -ClientSecret "<client secret>"
-   ```
-   This sets the OAuth app settings on the Web App (flipping it to **real GitHub login**) and mirrors them to GitHub secrets. The app restarts automatically.
+Every push to `main`:
 
-Now anyone signing in uses their **real GitHub account**; new users are **pending** until you approve them at `/admin`.
+1. Installs dependencies and runs syntax checks and tests.
+2. Compiles Bicep.
+3. Signs into Azure with GitHub OIDC.
+4. Creates or updates the Azure resources.
+5. Refreshes public customer research and Foundry agents when their definitions changed or metadata is absent.
+6. Uploads customer-agent metadata to private Blob Storage.
+7. Deploys the Node application to App Service.
+8. Verifies `/healthz` reports all 42 customer agents.
 
-## Notes & next steps
-- **Access store** (`data/store.json`) lives on the App Service filesystem and resets if the app is redeployed/scaled. For durable multi-instance state, mount Azure Files or move to a database — fine as-is for a single-instance internal tool.
-- Scale up the plan (B1 → P1v3) if you need more headroom or always-on warm starts (`Always On` is already implied on Basic+).
-- To redeploy manually: **Actions → Build & Deploy Hubble → Run workflow**.
+The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, uploads metadata, and restarts the app.
+
+## GitHub OAuth
+
+GitHub does not expose an API for creating OAuth Apps. Complete the one manual registration in [AUTH-SETUP.md](AUTH-SETUP.md), then run:
+
+```powershell
+.\scripts\configure-github-oauth.ps1 -ClientId "<id>" -ClientSecret "<secret>"
+```
+
+The script stores the credentials as repository secrets and triggers the deployment workflow. The workflow applies them to App Service. Until that is complete, production shows a setup-pending sign-in page; simulated login is never exposed.

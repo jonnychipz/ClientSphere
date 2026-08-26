@@ -1,72 +1,197 @@
-name: Build & Deploy Hubble
+name: Validate and deploy ClientSphere
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      refresh_customer_agents:
+        description: Refresh public research and Foundry agents
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: hubble-deploy
+  group: clientsphere-production
   cancel-in-progress: false
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --omit=dev
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: az bicep build --file infra/main.bicep
 
-      - name: Syntax check
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: production
+      url: ${{ steps.outputs.outputs.webapp_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision Azure infrastructure
+        shell: bash
         run: |
-          node -c server.mjs
-          node -c auth.mjs
-          node -c store.mjs
-          node -c webgrounding.mjs
-          node -c public/app.js
-          node -c public/admin.js
+          az group create \
+            --name "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --location uksouth \
+            --tags application=ClientSphere managedBy=GitHubActions \
+            --output none
 
-      - name: Package artifact
+          az deployment group create \
+            --name clientsphere-main \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/main.bicep \
+            --parameters \
+              deploymentPrincipalObjectId="${{ vars.AZURE_CLIENT_OBJECT_ID }}" \
+              sessionSecret="${{ secrets.SESSION_SECRET }}" \
+            --output json > deployment.json
+
+      - name: Export deployment outputs
+        id: outputs
+        shell: bash
+        run: |
+          echo "PROJECT_ENDPOINT=$(jq -r '.properties.outputs.projectEndpoint.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "CUSTOMER_AGENT_METADATA_BLOB_URL=$(jq -r '.properties.outputs.metadataBlobUrl.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "STORAGE_ACCOUNT=$(jq -r '.properties.outputs.storageAccountName.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "WEBAPP_NAME=$(jq -r '.properties.outputs.webAppName.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "webapp_url=$(jq -r '.properties.outputs.webAppUrl.value' deployment.json)" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - name: Decide whether customer agents need refresh
+        id: agent_refresh
+        shell: bash
+        run: |
+          exists=$(az storage blob exists \
+            --account-name "$STORAGE_ACCOUNT" \
+            --container-name config \
+            --name customer-agents.json \
+            --auth-mode login \
+            --query exists -o tsv || echo false)
+
+          changed=false
+          base="${{ github.event.before }}"
+          if [[ "${{ github.event_name }}" == "push" && -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
+            git fetch --no-tags --depth=1 origin "$base"
+            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
+              changed=true
+            fi
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            changed=true
+          fi
+
+          requested="${{ github.event.inputs.refresh_customer_agents || 'false' }}"
+          if [[ "$exists" != "true" || "$changed" == "true" || "$requested" == "true" ]]; then
+            echo "refresh=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "refresh=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Refresh public customer research
+        if: steps.agent_refresh.outputs.refresh == 'true'
+        run: npm run customers:refresh
+
+      - name: Provision customer agents
+        if: steps.agent_refresh.outputs.refresh == 'true'
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npm run agents:provision; then
+              exit 0
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              exit 1
+            fi
+            echo "Foundry role propagation pending; retrying in 30 seconds..."
+            sleep 30
+          done
+
+      - name: Package application
+        shell: bash
         run: |
           zip -r release.zip . \
-            -x "*.git*" \
+            -x ".git/*" \
             -x ".github/*" \
+            -x ".azure/*" \
+            -x "infra/*" \
+            -x "scripts/*" \
+            -x "test/*" \
+            -x "knowledge/*" \
             -x "data/*" \
             -x "*.png" \
             -x "*.bak"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hubble-app
-          path: release.zip
+      - name: Deploy application
+        run: |
+          az webapp deploy \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$WEBAPP_NAME" \
+            --src-path release.zip \
+            --type zip \
+            --clean true \
+            --restart true \
+            --output none
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.webapp-url }}
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: hubble-app
+      - name: Configure GitHub OAuth
+        if: env.GH_OAUTH_CLIENT_ID != '' && env.GH_OAUTH_CLIENT_SECRET != ''
+        env:
+          GH_OAUTH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
+          GH_OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+        run: |
+          az webapp config appsettings set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$WEBAPP_NAME" \
+            --settings \
+              GITHUB_CLIENT_ID="$GH_OAUTH_CLIENT_ID" \
+              GITHUB_CLIENT_SECRET="$GH_OAUTH_CLIENT_SECRET" \
+              AUTH_DEV_MODE=false \
+            --output none
 
-      - name: Deploy to Azure Web App
-        id: deploy
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: release.zip
+      - name: Smoke test
+        shell: bash
+        run: |
+          url="${{ steps.outputs.outputs.webapp_url }}/healthz"
+          for attempt in {1..20}; do
+            if curl --fail --silent --show-error "$url" | jq -e '.status == "ok" and .customers == 42' >/dev/null; then
+              exit 0
+            fi
+            sleep 15
+          done
+          curl --fail --show-error "$url"

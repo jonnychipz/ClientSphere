@@ -1,0 +1,338 @@
+[
+  {
+    "id": "a-safe",
+    "name": "A-SAFE",
+    "website": "https://www.asafe.com/en-gb/",
+    "sector": "Industrial safety",
+    "summary": "Industrial workplace safety barriers, bollards, gates, and related protection systems.",
+    "topics": ["Business overview", "Products and solutions", "Industries served", "Innovation and sustainability", "Leadership and ownership", "Recent news"]
+  },
+  {
+    "id": "airinmar",
+    "name": "Airinmar",
+    "website": "https://www.airinmar.com/",
+    "sector": "Aviation services",
+    "summary": "Aircraft component repair management and warranty support services.",
+    "topics": ["Business overview", "Repair management services", "Warranty support", "Aviation customers", "Operational priorities", "Recent news"]
+  },
+  {
+    "id": "barrett-steel",
+    "name": "Barrett Steel",
+    "website": "https://www.barrettsteel.com/",
+    "sector": "Steel distribution",
+    "summary": "Steel stockholding, processing, and supply services across the United Kingdom.",
+    "topics": ["Business overview", "Products and processing", "Sites and logistics", "Industries served", "Sustainability", "Recent news"]
+  },
+  {
+    "id": "bauder",
+    "name": "Bauder",
+    "website": "https://www.bauder.co.uk/",
+    "sector": "Construction products",
+    "summary": "Flat roofing, waterproofing, green roof, and photovoltaic roof systems.",
+    "topics": ["Business overview", "Roof systems", "Technical services", "Sustainability", "Projects and sectors", "Recent news"]
+  },
+  {
+    "id": "brigade-electronics",
+    "name": "Brigade Electronics",
+    "website": "https://brigade-electronics.com/",
+    "sector": "Vehicle safety technology",
+    "summary": "Commercial vehicle safety systems and collision-prevention technology.",
+    "topics": ["Business overview", "Safety products", "Target industries", "Technology and innovation", "Global operations", "Recent news"]
+  },
+  {
+    "id": "cobham-satcom",
+    "name": "Cobham Satcom",
+    "website": "https://cobham-satcom.com/",
+    "sector": "Satellite communications",
+    "summary": "Satellite communication terminals and connectivity solutions for maritime, land, and government markets.",
+    "topics": ["Business overview", "Products and platforms", "Markets served", "Technology roadmap", "Partners and customers", "Recent news"]
+  },
+  {
+    "id": "draken",
+    "name": "Draken",
+    "website": "https://www.draken.aero/",
+    "sector": "Aerospace and defence",
+    "summary": "Mission-critical aviation services, operational readiness, and training support.",
+    "topics": ["Business overview", "Services and capabilities", "Customers and contracts", "Fleet and operations", "Strategy and investment", "Recent news"]
+  },
+  {
+    "id": "create-fertility",
+    "name": "CREATE Fertility",
+    "website": "https://www.createfertility.co.uk/",
+    "sector": "Healthcare",
+    "summary": "Fertility treatment and IVF services delivered through clinics in the United Kingdom.",
+    "topics": ["Business overview", "Treatments and services", "Clinic network", "Patient experience", "Clinical innovation", "Recent news"]
+  },
+  {
+    "id": "de-la-rue",
+    "name": "De La Rue",
+    "website": "https://www.delarue.com/",
+    "sector": "Authentication and currency",
+    "summary": "Secure authentication, identity, and currency solutions for governments and organisations.",
+    "topics": ["Business overview", "Business divisions", "Products and services", "Strategy and transformation", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "eland-cables",
+    "name": "Eland Cables",
+    "website": "https://www.elandcables.com/",
+    "sector": "Cable manufacturing and distribution",
+    "summary": "Global supplier of power, data, control, and specialist cable products.",
+    "topics": ["Business overview", "Product portfolio", "Industries served", "Testing and quality", "Sustainability", "Recent news"]
+  },
+  {
+    "id": "element",
+    "name": "Element Materials Technology",
+    "website": "https://www.element.com/",
+    "sector": "Testing, inspection, and certification",
+    "summary": "Testing, inspection, certification, and advisory services across regulated industries.",
+    "topics": ["Business overview", "Services and capabilities", "Industries served", "Laboratory network", "Growth strategy", "Recent news"]
+  },
+  {
+    "id": "nurture-group",
+    "name": "Nurture Group",
+    "website": "https://www.nurture-group.co.uk/services/",
+    "sector": "Environmental and grounds services",
+    "summary": "Grounds maintenance, workplace solutions, winter gritting, and related environmental services.",
+    "topics": ["Business overview", "Service portfolio", "Customers and sectors", "Acquisitions and growth", "Sustainability", "Recent news"]
+  },
+  {
+    "id": "gripple",
+    "name": "Gripple",
+    "website": "https://www.gripple.com/",
+    "sector": "Industrial manufacturing",
+    "summary": "Employee-owned manufacturer of wire joining, tensioning, and suspension systems.",
+    "topics": ["Business overview", "Product portfolio", "Employee ownership", "Manufacturing and innovation", "Global markets", "Recent news"]
+  },
+  {
+    "id": "hill-smith",
+    "name": "Hill & Smith",
+    "website": "https://hsgroup.com/",
+    "sector": "Infrastructure products",
+    "summary": "Engineered infrastructure products and services for transport, utilities, and security markets.",
+    "topics": ["Business overview", "Portfolio companies", "Markets served", "Strategy and acquisitions", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "hl-smith-transmissions",
+    "name": "H L Smith Transmissions",
+    "website": "https://hlsmith.co.uk/",
+    "sector": "Automotive remanufacturing",
+    "summary": "Remanufactured commercial vehicle transmissions and transmission parts.",
+    "topics": ["Business overview", "Products and services", "Remanufacturing operations", "Customers and markets", "Quality and sustainability", "Recent news"]
+  },
+  {
+    "id": "itf",
+    "name": "International Tennis Federation",
+    "website": "https://www.itftennis.com/en/",
+    "sector": "International sport",
+    "summary": "World governing body for tennis, responsible for major competitions, development, and rules.",
+    "topics": ["Organisation overview", "Competitions", "Participation and development", "Governance", "Digital initiatives", "Recent news"]
+  },
+  {
+    "id": "sealey",
+    "name": "Sealey",
+    "website": "https://www.sealey.co.uk/",
+    "sector": "Tools and equipment",
+    "summary": "Supplier of professional tools, workshop equipment, and consumables.",
+    "topics": ["Business overview", "Product portfolio", "Distribution model", "Customers and sectors", "Digital commerce", "Recent news"]
+  },
+  {
+    "id": "james-walker",
+    "name": "James Walker",
+    "website": "https://jameswalkergroup.com/",
+    "sector": "Industrial engineering",
+    "summary": "Engineering products and services focused on sealing technology and fluid control.",
+    "topics": ["Business overview", "Products and engineering", "Industries served", "Global operations", "Innovation and sustainability", "Recent news"]
+  },
+  {
+    "id": "jellycat",
+    "name": "Jellycat",
+    "website": "https://jellycat.com/",
+    "sector": "Consumer products",
+    "summary": "Designer and retailer of soft toys, gifts, and books.",
+    "topics": ["Business overview", "Products and brand", "Routes to market", "International growth", "Customer experience", "Recent news"]
+  },
+  {
+    "id": "john-cotton",
+    "name": "John Cotton",
+    "website": "https://www.johncotton.co.uk/",
+    "sector": "Textile manufacturing",
+    "summary": "Manufacturer of pillows, duvets, mattress products, and nonwoven materials.",
+    "topics": ["Business overview", "Products and brands", "Manufacturing footprint", "Retail customers", "Sustainability", "Recent news"]
+  },
+  {
+    "id": "lrqa",
+    "name": "LRQA",
+    "website": "https://www.lrqa.com/en-gb/",
+    "sector": "Assurance and certification",
+    "summary": "Assurance, certification, inspection, training, and advisory services.",
+    "topics": ["Business overview", "Services and solutions", "Industries served", "Cyber and ESG capabilities", "Global operations", "Recent news"]
+  },
+  {
+    "id": "luxfer",
+    "name": "Luxfer",
+    "website": "https://www.luxfer.com/",
+    "sector": "Advanced materials",
+    "summary": "Engineered magnesium, zirconium, aluminium, and composite products for specialist applications.",
+    "topics": ["Business overview", "Business units", "Products and markets", "Innovation", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "melrose-industries",
+    "name": "Melrose Industries",
+    "website": "https://www.melroseplc.net/",
+    "sector": "Aerospace technology",
+    "summary": "Aerospace technology group focused on engines and structures.",
+    "topics": ["Business overview", "Operating businesses", "Markets and customers", "Strategy and investment", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "minova",
+    "name": "Minova",
+    "website": "https://www.minovaglobal.com/",
+    "sector": "Mining and infrastructure",
+    "summary": "Ground support products and services for mining, tunnelling, and infrastructure.",
+    "topics": ["Business overview", "Products and systems", "Industries served", "Global operations", "Safety and innovation", "Recent news"]
+  },
+  {
+    "id": "molins",
+    "name": "Molins",
+    "website": "https://www.molins.com/en",
+    "sector": "Industrial machinery",
+    "summary": "Engineering and manufacturing of high-speed machinery and automation systems.",
+    "topics": ["Business overview", "Machinery portfolio", "Markets served", "Service and support", "Innovation", "Recent news"]
+  },
+  {
+    "id": "navigator-terminals",
+    "name": "Navigator Terminals",
+    "website": "https://www.navigatorterminals.com/",
+    "sector": "Energy and logistics infrastructure",
+    "summary": "Bulk liquid storage terminals and associated logistics services.",
+    "topics": ["Business overview", "Terminal network", "Products handled", "Energy transition", "Operations and safety", "Recent news"]
+  },
+  {
+    "id": "optos",
+    "name": "Optos",
+    "website": "https://www.optos.com/",
+    "sector": "Medical technology",
+    "summary": "Ultra-widefield retinal imaging devices, software, and clinical solutions.",
+    "topics": ["Business overview", "Products and technology", "Clinical applications", "Markets and customers", "Innovation", "Recent news"]
+  },
+  {
+    "id": "pam-group",
+    "name": "PAM Group",
+    "website": "https://pamgroup.co.uk/",
+    "sector": "Occupational health",
+    "summary": "Occupational health, wellbeing, rehabilitation, and workplace services.",
+    "topics": ["Business overview", "Services", "Customers and sectors", "Digital health", "Growth strategy", "Recent news"]
+  },
+  {
+    "id": "peak-scientific",
+    "name": "PEAK Scientific",
+    "website": "https://www.peakscientific.com/",
+    "sector": "Scientific instruments",
+    "summary": "Laboratory gas generators and support services for scientific applications.",
+    "topics": ["Business overview", "Product portfolio", "Applications and markets", "Global service model", "Innovation and sustainability", "Recent news"]
+  },
+  {
+    "id": "pelsis",
+    "name": "Pelsis",
+    "website": "https://www.pelsis.com/",
+    "sector": "Pest management products",
+    "summary": "Professional and retail pest-control products, brands, and services.",
+    "topics": ["Business overview", "Brands and products", "Professional and retail markets", "Acquisitions and growth", "Sustainability", "Recent news"]
+  },
+  {
+    "id": "pipeline-technique",
+    "name": "Pipeline Technique",
+    "website": "https://www.crcevans.com/ptl-has-completed-a-transformational-triple-acquisition-from-stanley-black-decker/",
+    "sector": "Energy infrastructure services",
+    "summary": "Pipeline welding, coating, field-joint, and related energy infrastructure services.",
+    "topics": ["Business overview", "Services and capabilities", "Markets and projects", "Acquisitions", "Technology and safety", "Recent news"]
+  },
+  {
+    "id": "quanta-dialysis",
+    "name": "Quanta Dialysis Technologies",
+    "website": "https://quantadt.com/us/",
+    "sector": "Medical technology",
+    "summary": "Dialysis systems designed for clinical and home treatment settings.",
+    "topics": ["Business overview", "Products and technology", "Clinical evidence", "Regulatory progress", "Commercial strategy", "Recent news"]
+  },
+  {
+    "id": "quotient-sciences",
+    "name": "Quotient Sciences",
+    "website": "https://www.quotientsciences.com/",
+    "sector": "Pharmaceutical services",
+    "summary": "Drug development, clinical, formulation, manufacturing, and CRDMO services.",
+    "topics": ["Business overview", "Service portfolio", "Therapeutic and customer focus", "Sites and capabilities", "Growth strategy", "Recent news"]
+  },
+  {
+    "id": "savannah-energy",
+    "name": "Savannah Energy",
+    "website": "https://www.savannah-energy.com/",
+    "sector": "Energy",
+    "summary": "Energy projects and operations focused on Africa.",
+    "topics": ["Business overview", "Assets and operations", "Markets and customers", "Strategy and projects", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "sgn",
+    "name": "SGN",
+    "website": "https://www.sgn.co.uk/",
+    "sector": "Gas networks",
+    "summary": "Gas distribution network operator serving customers in Scotland and southern England.",
+    "topics": ["Business overview", "Network and operations", "Customers and regulation", "Energy transition", "Investment programme", "Recent news"]
+  },
+  {
+    "id": "score-group",
+    "name": "Score Group",
+    "website": "https://score-group.com/",
+    "sector": "Energy engineering services",
+    "summary": "Valve, gas-turbine, and industrial engineering products and services.",
+    "topics": ["Business overview", "Services and capabilities", "Industries served", "Global operations", "Technology and skills", "Recent news"]
+  },
+  {
+    "id": "spaldings",
+    "name": "Spaldings",
+    "website": "https://spaldings.co.uk/",
+    "sector": "Agricultural and groundcare supplies",
+    "summary": "Agricultural, forestry, groundcare, and industrial replacement parts and equipment.",
+    "topics": ["Business overview", "Product portfolio", "Customers and markets", "Distribution and ecommerce", "Operations", "Recent news"]
+  },
+  {
+    "id": "tristel",
+    "name": "Tristel",
+    "website": "https://investors.tristel.com/",
+    "sector": "Infection prevention",
+    "summary": "Manufacturer of infection-prevention and contamination-control products.",
+    "topics": ["Business overview", "Products and technology", "Markets and regulation", "Strategy and expansion", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "royal-kennel-club",
+    "name": "The Royal Kennel Club",
+    "website": "https://www.royalkennelclub.com/",
+    "sector": "Membership and animal welfare",
+    "summary": "Organisation supporting dog registration, events, training, health, and welfare.",
+    "topics": ["Organisation overview", "Services and membership", "Events and competitions", "Health and welfare", "Digital services", "Recent news"]
+  },
+  {
+    "id": "vopak",
+    "name": "Vopak",
+    "website": "https://www.vopak.com/",
+    "sector": "Energy and chemicals infrastructure",
+    "summary": "Global independent storage infrastructure for energy and chemical products.",
+    "topics": ["Business overview", "Terminal portfolio", "Customers and markets", "Energy transition", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "xp-power",
+    "name": "XP Power",
+    "website": "https://www.xppower.com/",
+    "sector": "Power electronics",
+    "summary": "Power converters, power supplies, and high-voltage products for industrial and healthcare equipment.",
+    "topics": ["Business overview", "Product portfolio", "Markets and customers", "Operations and supply chain", "Financial performance", "Recent news"]
+  },
+  {
+    "id": "yamazaki-mazak",
+    "name": "Yamazaki Mazak",
+    "website": "https://www.mazak.com/uk-en/",
+    "sector": "Machine tools and automation",
+    "summary": "Machine tools, laser processing equipment, automation, and manufacturing software.",
+    "topics": ["Business overview", "Products and technology", "Industries served", "Manufacturing and service", "Digital and automation strategy", "Recent news"]
+  }
+]

@@ -4,3 +4,7 @@ data/
 *.log
 .DS_Store
 npm-debug.log*
+customer-agents.json
+knowledge/customers/
+.azure/
+infra/main.json

@@ -4,16 +4,18 @@ import crypto from "node:crypto";
 
 const CLIENT_ID = (process.env.GITHUB_CLIENT_ID || "").trim();
 const CLIENT_SECRET = (process.env.GITHUB_CLIENT_SECRET || "").trim();
-const SECRET = process.env.SESSION_SECRET || "hubble-dev-secret-change-me";
-const COOKIE = "hubble_session";
+const SECRET = process.env.SESSION_SECRET || "clientsphere-dev-secret-change-me";
+const COOKIE = "clientsphere_session";
 const MAX_AGE = 7 * 24 * 60 * 60; // 7 days (seconds)
 
 export const ADMIN_LOGINS = (process.env.ADMIN_LOGINS || "jonnychipz")
   .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 export const isAdmin = (login) => !!login && ADMIN_LOGINS.includes(login.toLowerCase());
 
-// Real GitHub OAuth is used when credentials exist; otherwise dev mode.
-export const DEV_MODE = !(CLIENT_ID && CLIENT_SECRET) || process.env.AUTH_DEV_MODE === "true";
+export const OAUTH_CONFIGURED = Boolean(CLIENT_ID && CLIENT_SECRET);
+const production = process.env.NODE_ENV === "production";
+// Missing OAuth credentials may enable local dev login, but never in production.
+export const DEV_MODE = process.env.AUTH_DEV_MODE === "true" || (!production && !OAUTH_CONFIGURED);
 
 // ---------- signed cookies ----------
 function b64url(buf) { return Buffer.from(buf).toString("base64url"); }
@@ -57,10 +59,10 @@ export function sessionLogin(req) {
 // ---------- OAuth state (CSRF) ----------
 export function makeState() { return crypto.randomBytes(16).toString("hex"); }
 export function setStateCookie(res, state, secure) {
-  res.setHeader("Set-Cookie", `hubble_oauth_state=${state}; HttpOnly; Path=/; SameSite=Lax;${secure ? " Secure;" : ""} Max-Age=600`);
+  res.setHeader("Set-Cookie", `clientsphere_oauth_state=${state}; HttpOnly; Path=/; SameSite=Lax;${secure ? " Secure;" : ""} Max-Age=600`);
 }
 export function checkState(req, state) {
-  return state && parseCookies(req).hubble_oauth_state === state;
+  return state && parseCookies(req).clientsphere_oauth_state === state;
 }
 
 // ---------- GitHub OAuth web flow ----------
@@ -85,7 +87,7 @@ export async function exchangeCode(code, redirectUri) {
   return data.access_token;
 }
 export async function fetchGitHubUser(token) {
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "Hubble" };
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "ClientSphere" };
   const res = await fetch("https://api.github.com/user", { headers });
   if (!res.ok) throw new Error(`GitHub /user returned ${res.status}`);
   const u = await res.json();
