@@ -372,6 +372,26 @@ resource deploymentOpenAiContributor 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
+resource deploymentCognitiveUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundry.id, deploymentPrincipalObjectId, cognitiveServicesUserRole)
+  scope: foundry
+  properties: {
+    principalId: deploymentPrincipalObjectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveServicesUserRole
+  }
+}
+
+resource deploymentOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundry.id, deploymentPrincipalObjectId, cognitiveOpenAiUserRole)
+  scope: foundry
+  properties: {
+    principalId: deploymentPrincipalObjectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveOpenAiUserRole
+  }
+}
+
 resource deploymentBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storage.id, deploymentPrincipalObjectId, storageBlobContributorRole)
   scope: storage

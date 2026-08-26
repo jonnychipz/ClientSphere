@@ -4,14 +4,12 @@ GitHub OAuth protects ClientSphere and preserves Hubble's approval/admin experie
 
 1. Sign in to GitHub as `jonnychipz`.
 2. Open <https://github.com/settings/applications/new>.
-3. Copy the live URL from the production GitHub Actions environment or run:
-   `az containerapp show -g rg-clientsphere-95bc -n clientsphere-95bc --query properties.configuration.ingress.fqdn -o tsv`
-4. Register:
+3. Register:
    - Application name: `ClientSphere`
-   - Homepage URL: `https://<container-app-fqdn>`
-   - Authorization callback URL: `https://<container-app-fqdn>/auth/callback`
-5. Generate a client secret.
-6. Run:
+   - Homepage URL: `https://clientsphere-95bc.victoriousflower-3dcb522a.uksouth.azurecontainerapps.io`
+   - Authorization callback URL: `https://clientsphere-95bc.victoriousflower-3dcb522a.uksouth.azurecontainerapps.io/auth/callback`
+4. Generate a client secret.
+5. Run:
 
 ```powershell
 .\scripts\configure-github-oauth.ps1 -ClientId "<client id>" -ClientSecret "<client secret>"

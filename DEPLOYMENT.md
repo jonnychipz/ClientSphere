@@ -2,6 +2,8 @@
 
 ClientSphere uses GitHub Actions OIDC and Bicep. No publish profile or Azure client secret is stored in GitHub.
 
+Live URL: <https://clientsphere-95bc.victoriousflower-3dcb522a.uksouth.azurecontainerapps.io>
+
 ## One-time identity bootstrap
 
 Run:
