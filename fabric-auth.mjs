@@ -3,7 +3,12 @@ import { parseCookies } from "./auth.mjs";
 
 const FABRIC_COOKIE = "clientsphere_fabric";
 const FABRIC_STATE_COOKIE = "clientsphere_fabric_state";
-const FABRIC_SCOPE = "openid profile email https://ai.azure.com/user_impersonation";
+const FABRIC_SCOPE = "openid profile email offline_access https://ai.azure.com/.default";
+const FABRIC_CLAIMS = JSON.stringify({
+  access_token: {
+    xms_cc: { values: ["CP1"] },
+  },
+});
 const EXPECTED_AUDIENCES = new Set(["https://ai.azure.com", "https://ai.azure.com/"]);
 
 const TENANT_ID = (process.env.ENTRA_TENANT_ID || "").trim();
@@ -106,6 +111,7 @@ export function fabricAuthorizeUrl({ state, redirectUri }) {
     scope: FABRIC_SCOPE,
     state,
     prompt: "select_account",
+    claims: FABRIC_CLAIMS,
   });
   return `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${params}`;
 }

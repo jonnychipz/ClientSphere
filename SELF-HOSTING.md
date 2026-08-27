@@ -336,7 +336,7 @@ The base application deploys without Fabric or Entra configuration. Until this s
      --scope $projectId
    ```
 
-4. Register a single-tenant Microsoft Entra web application. Add the exact redirect URI `$appUrl/auth/fabric/callback`, add the delegated **Azure AI Foundry → user_impersonation** permission, and grant consent if required by tenant policy.
+4. Register a single-tenant Microsoft Entra web application. Add the exact redirect URI `$appUrl/auth/fabric/callback`, add the delegated **Azure AI Foundry → user_impersonation** permission, and grant consent if required by tenant policy. ClientSphere requests the resource's `.default` scope and declares the `CP1` client capability so Foundry can issue and challenge a Continuous Access Evaluation-capable delegated token.
 5. Create a client secret, then run:
 
    ```powershell
