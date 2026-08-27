@@ -1,19 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCustomer } from "../customer-registry.mjs";
 import { isPrivateAddress, sourceAllowedForCustomer } from "../webgrounding.mjs";
 
-const customer = getCustomer("a-safe");
+const customer = { website: "https://www.example-customer.com/", domain: "example-customer.com" };
 
 test("source allowlist accepts official and registry domains", () => {
-  assert.equal(sourceAllowedForCustomer("https://www.asafe.com/en-gb/about/", customer), true);
+  assert.equal(sourceAllowedForCustomer("https://www.example-customer.com/about/", customer), true);
   assert.equal(sourceAllowedForCustomer("https://find-and-update.company-information.service.gov.uk/company/123", customer), true);
 });
 
 test("source allowlist rejects unrelated and suffix-confusion domains", () => {
   assert.equal(sourceAllowedForCustomer("https://example.com/", customer), false);
-  assert.equal(sourceAllowedForCustomer("https://asafe.com.evil.example/", customer), false);
-  assert.equal(sourceAllowedForCustomer("http://www.asafe.com/", customer), false);
+  assert.equal(sourceAllowedForCustomer("https://example-customer.com.evil.example/", customer), false);
+  assert.equal(sourceAllowedForCustomer("http://www.example-customer.com/", customer), false);
 });
 
 test("private network addresses are blocked", () => {

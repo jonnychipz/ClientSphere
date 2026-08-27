@@ -1,89 +1,195 @@
 # ClientSphere
 
-ClientSphere is a customer-specific public-intelligence and meeting-coaching application built on Azure AI Foundry. It preserves Hubble's proven two-pane voice/avatar experience while replacing the GitHub-only knowledge domain with 40 isolated customer agents sourced from the `SME&C Accounts` Edge favourites.
+ClientSphere is a self-hosted customer-intelligence and meeting-coaching application built on Azure AI Foundry, Azure Speech, Azure Container Apps, and GitHub Actions. Each configured customer receives an isolated public-source knowledge store, one general adviser, and three sector-tailored synthetic use-case agents.
 
-## Capabilities
+> The repository's `config/customers.json` is the catalogue for the current deployment. **Replace the entire file with your own customers before the first deployment of a fork.** Generated research, agent IDs, secrets, users, and conversations are not committed.
 
-- Searchable customer switcher with official logo/favicon, sector, summary, discussion topics, and sources.
-- Four deterministic Foundry modes per customer: one concise general adviser plus three industry-tailored synthetic use-case agents, all sharing that customer's isolated vector store.
-- 120 synthetic demo agents covering image-first, operational reasoning, and business-value scenario workflows.
-- Three click-through scenes per synthetic agent: Live signal, Agent at work, and Value realised, each carrying realistic customer-labelled synthetic records.
-- Brief + Voice mode for fast avatar conversation and Structured mode for screen-shared workflow, evidence, controls, KPI, and proof-of-value artefacts.
-- GPT-5.6 Sol, Luna, and Terra model deployments with bounded PNG/JPEG/WebP input for multimodal demonstrations.
-- Customer-owned conversation tokens that prevent conversations being reused across customer agents.
-- Public-source research over official customer websites, refreshed weekly with retrieval notes and timestamps.
-- Guarded live web grounding restricted to the active customer's official domain and approved public registries.
-- Evidence-led executive brief, roleplay and scorecard, session recap, citations, and public links.
-- Azure Speech real-time avatars, speech-to-text, barge-in, scenes, and the complete Hubble built-in voice catalogue.
-- Optional custom Jonnychipz avatar/voice wiring, disabled until assets become available.
-- GitHub OAuth access approval, an encrypted durable administrator registry, sole-admin protection, audit/usage data, and an approved-admin-only dashboard.
-- Bicep infrastructure and GitHub Actions deployment using secretless OIDC.
+## What it provides
 
-## Customer set
-
-`config/customers.json` contains the 40 active official customer sites. Generated website research is written to `knowledge/customers/` and deliberately ignored by Git because it is refreshed by GitHub Actions.
+- A searchable customer switcher with official-site branding, sector context, topics, and sources.
+- Four Foundry agent modes per customer: one public-intelligence adviser and three synthetic use-case agents.
+- Customer-isolated vector stores, agent metadata, and conversation tokens.
+- Brief voice conversations or structured, screen-shareable workflows.
+- GPT-5.6 Sol, Luna, and Terra deployments, including bounded image input for multimodal demonstrations.
+- Guarded live web grounding limited to the active customer's official domain and approved public registries.
+- Azure Speech voices, real-time avatars, speech-to-text, barge-in, and optional custom avatar/voice support.
+- GitHub OAuth, administrator-controlled access approval, admin promotion, sole-admin protection, usage views, and logs.
+- Bicep infrastructure, secretless GitHub-to-Azure OIDC, automatic deployment, and weekly intelligence refresh.
 
 ## Architecture
 
 ```text
 Browser
-  |-- customer selector ------> GET /api/customers/:id
-  |-- customer chat ----------> POST /api/chat { customerId, agentMode, threadId, message, attachments? }
-  |                               |-- general or synthetic customer Foundry agent
-  |                               |-- isolated file-search vector store
-  |                               `-- guarded fetch_public_source function tool
-  |-- avatar + speech --------> keyless Azure Speech token and relay endpoints
-  `-- GitHub OAuth -----------> approval and admin workflow
+  |-- GitHub OAuth and access approval
+  |-- customer selector ------> config/customers.json
+  |-- customer chat ----------> customer + mode-specific Foundry agent
+  |                               |-- isolated vector store
+  |                               `-- guarded official-source fetch tool
+  `-- voice/avatar -----------> keyless Azure Speech token broker
 
 Azure Container Apps managed identity
-  |-- Azure AI Foundry / GPT-5.4
-  |-- Azure Speech avatar and STT
-  |-- four-mode agent metadata embedded in the deployed image
-  |-- single-replica local user, usage, log, setting, and token store
-  `-- Key Vault and Container App session secret
+  |-- Azure AI Foundry / GPT-5.6 models
+  |-- Azure Speech
+  |-- Azure Container Registry
+  `-- encrypted access registry persisted in Container App tags
+
+GitHub Actions OIDC
+  |-- Bicep infrastructure deployment
+  |-- public website research
+  |-- Foundry agent and vector-store provisioning
+  `-- image build, deployment, smoke test, and obsolete-agent cleanup
 ```
+
+## Fastest production setup
+
+The complete, copy-and-paste setup is in **[SELF-HOSTING.md](SELF-HOSTING.md)**. The shortest path is:
+
+1. Install Git, PowerShell 7, Node.js 22, Azure CLI, and GitHub CLI.
+2. Fork or copy this repository into a GitHub repository you administer, then clone it.
+3. Replace `config/customers.json` and validate it:
+
+   ```powershell
+   npm ci
+   npm run customers:validate
+   npm test
+   ```
+
+4. Sign in and bootstrap GitHub OIDC. The script discovers the current GitHub repository, Azure tenant, GitHub login, and a stable unique resource suffix:
+
+   ```powershell
+   az login
+   gh auth login
+   .\scripts\bootstrap-github-oidc.ps1 -SubscriptionId "<azure-subscription-id>"
+   ```
+
+5. Commit and push the customer catalogue to `main`. The deployment workflow creates the Azure resources, researches the official customer sites, provisions all agents, builds the image, and deploys the app.
+6. Read the Container App URL from the completed workflow, create a GitHub OAuth App with `<app-url>/auth/callback`, then store its credentials:
+
+   ```powershell
+   .\scripts\configure-github-oauth.ps1
+   ```
+
+7. Sign in with the GitHub login used during bootstrap. That account becomes the first approved administrator; all other users remain pending until approved at `/admin`.
+
+## Customer catalogue
+
+`config/customers.json` is the only required customer input:
+
+```json
+[
+  {
+    "id": "example-manufacturing",
+    "name": "Example Manufacturing",
+    "website": "https://www.example-manufacturing.com/",
+    "sector": "Industrial manufacturing",
+    "summary": "A short public description of the organisation.",
+    "topics": [
+      "Business overview",
+      "Products and services",
+      "Strategy",
+      "Operations",
+      "Sustainability",
+      "Recent news"
+    ]
+  }
+]
+```
+
+Requirements:
+
+- `id` must be unique and use only lowercase letters, numbers, and hyphens.
+- `website` must be the customer's official HTTPS site.
+- `sector` drives the three automatically selected use-case agents.
+- `summary` and `topics` are catalogue guidance, not confidential account data.
+- The file must contain at least one customer.
+
+On a customer change, the deployment workflow automatically rebuilds research and agents. Removed ClientSphere-managed agents and vector stores are deleted after the new deployment passes its smoke test.
 
 ## Local development
 
-```powershell
-npm install
-npm run customers:refresh
+Local development uses `DefaultAzureCredential`, so run `az login` and use a Foundry project to which your account has the required data-plane roles.
 
-# PROJECT_ENDPOINT must address an existing Foundry project.
-npm run agents:provision
+```powershell
+Copy-Item .env.example .env
+# Fill PROJECT_ENDPOINT, SPEECH_STS_ENDPOINT, SESSION_SECRET, and ADMIN_LOGINS.
+npm ci
+npm run setup
 npm start
 ```
 
-Copy `.env.example` to `.env`. Local development enables simulated GitHub login only when `NODE_ENV` is not `production` and OAuth credentials are absent.
+`npm run setup` crawls the configured official sites, provisions or updates Foundry agents, and writes the ignored `customer-agents.json`. With `AUTH_DEV_MODE=true`, local sign-in is simulated; production never exposes simulated login.
 
-## Validation
+See [Local development](SELF-HOSTING.md#local-development) for exact role and configuration instructions.
 
-```powershell
-npm run check
-npm test
-az bicep build --file infra\main.bicep
-```
+## Configuration and secrets
 
-## Azure deployment
+| Name | Type | Required | Purpose |
+|---|---|---:|---|
+| `SESSION_SECRET` | GitHub secret | Yes | Signs sessions and encrypts the durable access registry; generated by bootstrap |
+| `GH_OAUTH_CLIENT_ID` | GitHub secret | Yes for production login | GitHub OAuth App client ID |
+| `GH_OAUTH_CLIENT_SECRET` | GitHub secret | Yes for production login | GitHub OAuth App client secret |
+| `ACS_CONNECTION_STRING` | GitHub secret | No | Enables approval and decision emails |
+| `AZURE_*` | GitHub variables | Yes | OIDC identity, tenant, subscription, regions, resource group, and app name |
+| `CLIENTSPHERE_SUFFIX` | GitHub variable | Yes | Stable 4-8 character resource-name suffix |
+| `ADMIN_LOGINS` | GitHub variable | Yes | GitHub login(s) permitted to bootstrap or recover administration |
+| `EMAIL_SENDER`, `ADMIN_EMAIL`, `ADMIN_NAME` | GitHub variables | No | Required together when approval email is enabled |
 
-Target:
+No Azure AI, Speech, or registry API keys are stored. GitHub Actions and the Container App use managed identities.
 
-- Tenant: `3081f76f-4086-4566-8b14-b57af1297762` (`mngenvmcap864574.onmicrosoft.com`)
-- Subscription: `c540854a-5c6f-4049-95bc-dce4eff11340`
-- Application region: UK South
-- Foundry/Speech region: Sweden Central
-- Model: `gpt-5.4`, version `2026-03-05`, Global Standard
+Do not rotate `SESSION_SECRET` casually: it also encrypts the persisted access registry. See [Secrets and rotation](SELF-HOSTING.md#secrets-and-rotation).
 
-The one-time OIDC bootstrap creates only the GitHub deployment identity:
+## Administration
 
-```powershell
-.\scripts\bootstrap-github-oidc.ps1
-```
+The configured bootstrap login is the only account that can become the initial administrator. At `/admin`, an approved administrator can:
 
-After that, all platform and application changes are provisioned by `.github/workflows/deploy.yml`. Public customer research and agent definitions refresh every Monday through `.github/workflows/refresh-customer-agents.yml`.
+- approve, deny, or delete users;
+- promote approved users to administrator or remove their admin role;
+- inspect recent usage and operational logs;
+- show or hide available voices and avatars.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) and [AUTH-SETUP.md](AUTH-SETUP.md).
+The application prevents deletion or demotion of the sole approved administrator. For ownership handover, approve and promote the new owner before demoting the old one.
 
-## Public-data boundary
+## Repository map
 
-ClientSphere uses public sources only. It does not ingest Microsoft internal account data, private communications, or customer-confidential content. Agents are required to distinguish facts, inferences, and unknowns, and to state reporting periods for financial and time-sensitive claims.
+| Path | Purpose |
+|---|---|
+| `config/customers.json` | Customer catalogue to replace in a fork |
+| `scripts/refresh-customer-content.mjs` | Official-site crawler and knowledge-file generator |
+| `scripts/provision-customer-agents.mjs` | Foundry agents and vector stores |
+| `scripts/configure-email.ps1` | Securely prompts for optional approval-email configuration |
+| `instructions.mjs` | Shared and customer-specific agent instructions |
+| `use-case-registry.mjs` | Sector-to-use-case definitions |
+| `server.mjs` | Web server, chat, Speech, auth, and admin APIs |
+| `public/` | Browser application and admin UI |
+| `infra/main.bicep` | Azure infrastructure and managed-identity roles |
+| `.github/workflows/deploy.yml` | Validation, provisioning, image build, deployment, and smoke test |
+| `.github/workflows/refresh-customer-agents.yml` | Weekly governed refresh trigger |
+| `custom-avatar/` | Optional custom avatar and voice preparation kit |
+
+## Common commands
+
+| Command | Action |
+|---|---|
+| `npm run customers:validate` | Validate the customer catalogue and generated mode count |
+| `npm run customers:refresh` | Crawl official customer sites into ignored local knowledge files |
+| `npm run agents:provision` | Create or update Foundry agents and metadata |
+| `npm run agents:cleanup` | Delete obsolete ClientSphere-managed agents and stores |
+| `npm run setup` | Refresh research, then provision agents |
+| `npm run check` | Run JavaScript syntax checks |
+| `npm test` | Run the Node test suite |
+| `npm start` | Start the app |
+
+## Security and data boundary
+
+ClientSphere is designed for public-source customer intelligence. Do not place customer-confidential data, internal account notes, private communications, credentials, or personal data in `config/customers.json` or the crawled knowledge path. Runtime web retrieval blocks private-network addresses and unrelated domains. Image uploads are type- and size-bounded.
+
+The default single-replica deployment persists the encrypted user/admin registry across revisions, while usage and log history are revision-local. See [STORAGE.md](STORAGE.md).
+
+## Further documentation
+
+- [SELF-HOSTING.md](SELF-HOSTING.md) - complete clone-to-production and local-development guide
+- [DEPLOYMENT.md](DEPLOYMENT.md) - deployment workflow reference
+- [AUTH-SETUP.md](AUTH-SETUP.md) - GitHub OAuth registration
+- [STORAGE.md](STORAGE.md) - persistence model
+- [EMAIL-WORKFLOW.md](EMAIL-WORKFLOW.md) - optional approval email
+- [custom-avatar/README.md](custom-avatar/README.md) - optional custom avatar and voice

@@ -37,7 +37,7 @@ jobs:
       - run: az bicep build --file infra/main.bicep
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -75,7 +75,7 @@ jobs:
 
           az group create \
             --name "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --location uksouth \
+            --location "${{ vars.AZURE_LOCATION }}" \
             --tags application=ClientSphere managedBy=GitHubActions \
             --output none
 
@@ -112,7 +112,11 @@ jobs:
             --template-file infra/main.bicep \
             --parameters \
               deploymentPrincipalObjectId="${{ vars.AZURE_CLIENT_OBJECT_ID }}" \
+              adminLogins="${{ vars.ADMIN_LOGINS }}" \
               sessionSecret="${{ secrets.SESSION_SECRET }}" \
+              suffix="${{ vars.CLIENTSPHERE_SUFFIX }}" \
+              location="${{ vars.AZURE_LOCATION }}" \
+              aiLocation="${{ vars.AZURE_AI_LOCATION }}" \
               applicationImage="$current_image" \
               agentStateB64="$agent_state" \
               accessStateTags=@access-state-tags.json \
@@ -240,6 +244,36 @@ jobs:
               AUTH_DEV_MODE=false \
             --output none
 
+      - name: Configure optional approval email
+        env:
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+          EMAIL_SENDER: ${{ vars.EMAIL_SENDER }}
+          ADMIN_EMAIL: ${{ vars.ADMIN_EMAIL }}
+          ADMIN_NAME: ${{ vars.ADMIN_NAME }}
+        run: |
+          if [[ -z "$ACS_CONNECTION_STRING$EMAIL_SENDER$ADMIN_EMAIL$ADMIN_NAME" ]]; then
+            echo "Approval email is not configured; access remains manageable in /admin."
+            exit 0
+          fi
+          if [[ -z "$ACS_CONNECTION_STRING" || -z "$EMAIL_SENDER" || -z "$ADMIN_EMAIL" || -z "$ADMIN_NAME" ]]; then
+            echo "Email configuration is incomplete. Set ACS_CONNECTION_STRING, EMAIL_SENDER, ADMIN_EMAIL, and ADMIN_NAME." >&2
+            exit 1
+          fi
+          az containerapp secret set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --secrets acs-connection-string="$ACS_CONNECTION_STRING" \
+            --output none
+          az containerapp update \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars \
+              ACS_CONNECTION_STRING=secretref:acs-connection-string \
+              EMAIL_SENDER="$EMAIL_SENDER" \
+              ADMIN_EMAIL="$ADMIN_EMAIL" \
+              ADMIN_NAME="$ADMIN_NAME" \
+            --output none
+
       - name: Unlock access governance
         if: always()
         shell: bash
@@ -272,8 +306,13 @@ jobs:
         shell: bash
         run: |
           url="${{ steps.outputs.outputs.app_url }}/healthz"
+          expected_customers=$(jq 'length' config/customers.json)
+          expected_modes=$((expected_customers * 4))
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error "$url" | jq -e '.status == "ok" and .customers == 40 and .agentModesConfigured == 160' >/dev/null; then
+            if curl --fail --silent --show-error "$url" | jq -e \
+              --argjson customers "$expected_customers" \
+              --argjson modes "$expected_modes" \
+              '.status == "ok" and .customers == $customers and .agentsConfigured == $customers and .agentModesConfigured == $modes' >/dev/null; then
               exit 0
             fi
             sleep 15

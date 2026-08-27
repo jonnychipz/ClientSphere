@@ -13,22 +13,28 @@ test("the first registered user becomes an approved administrator", () => {
   });
 });
 
-test("the genuine first user is administrator even when a recovery login is configured", () => {
-  assert.equal(registrationDisposition([], "alice", ["jonnychipz"]).isAdmin, true);
+test("a configured bootstrap login prevents an arbitrary first user becoming administrator", () => {
+  const disposition = registrationDisposition([], "alice", ["configured-owner"]);
+  assert.equal(disposition.status, "pending");
+  assert.equal(disposition.isAdmin, false);
+});
+
+test("the configured bootstrap login becomes the first administrator", () => {
+  assert.equal(registrationDisposition([], "configured-owner", ["configured-owner"]).isAdmin, true);
 });
 
 test("later users remain pending until approved", () => {
-  assert.equal(registrationDisposition([admin("owner")], "new-user", ["jonnychipz"]).status, "pending");
+  assert.equal(registrationDisposition([admin("owner")], "new-user", ["configured-owner"]).status, "pending");
 });
 
 test("a configured bootstrap login is not elevated while another admin exists", () => {
-  const disposition = registrationDisposition([admin("someone")], "jonnychipz", ["jonnychipz"]);
+  const disposition = registrationDisposition([admin("someone")], "configured-owner", ["configured-owner"]);
   assert.equal(disposition.status, "pending");
   assert.equal(disposition.isAdmin, false);
 });
 
 test("configured administrator can recover a registry with no approved admin", () => {
-  const disposition = registrationDisposition([user("someone", "denied")], "jonnychipz", ["jonnychipz"]);
+  const disposition = registrationDisposition([user("someone", "denied")], "configured-owner", ["configured-owner"]);
   assert.equal(disposition.isAdmin, true);
 });
 

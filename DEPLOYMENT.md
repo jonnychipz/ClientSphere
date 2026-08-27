@@ -1,61 +1,97 @@
-# Deployment
+# Deployment reference
 
-ClientSphere uses GitHub Actions OIDC and Bicep. No publish profile or Azure client secret is stored in GitHub.
+ClientSphere uses Bicep and GitHub Actions OIDC. It does not use an Azure publish profile, service-principal client secret, Azure AI key, Speech key, or registry password.
 
-Live URL: <https://clientsphere-95bc.victoriousflower-3dcb522a.uksouth.azurecontainerapps.io>
+For the complete first-time procedure, use [SELF-HOSTING.md](SELF-HOSTING.md).
 
-## One-time identity bootstrap
+## Bootstrap
 
-Run:
+From a clone of the target GitHub repository:
 
 ```powershell
-.\scripts\bootstrap-github-oidc.ps1
+az login
+gh auth login
+.\scripts\bootstrap-github-oidc.ps1 -SubscriptionId "<azure-subscription-id>"
 ```
 
-This creates `id-github-clientsphere-95bc` in `rg-clientsphere-identity-95bc`, adds a GitHub environment federated credential, grants deployment permissions, and writes the required GitHub variables. This is the only local Azure bootstrap; the managed identity is the trust anchor that lets the first workflow run.
+The script discovers the repository and GitHub login, enforces GitHub's immutable repository-ID-bound OIDC subject, derives a stable unique suffix, creates the Azure deployment identity and federated credential, restricts production deployment to `main`, grants deployment roles, creates repository variables, and generates `SESSION_SECRET`.
+
+Use `Get-Help .\scripts\bootstrap-github-oidc.ps1 -Detailed` or inspect the parameter block to override repository, tenant, admin login, suffix, or regions.
 
 ## Provisioned resources
 
-The `infra/main.bicep` deployment creates:
+With suffix `<suffix>`, `infra/main.bicep` creates:
 
-| Resource | Name |
+| Resource | Default name |
 |---|---|
-| Resource group | `rg-clientsphere-95bc` |
-| Azure AI Services / Foundry | `clientsphere-ai-95bc` |
+| Resource group | `rg-clientsphere-<suffix>` |
+| Azure AI Services / Foundry | `clientsphere-ai-<suffix>` |
 | Foundry project | `clientsphere-project` |
-| General/Sol model | `gpt-5.6-sol` (`2026-07-09`) |
-| Multimodal/Luna model | `gpt-5.6-luna` (`2026-07-09`) |
-| Reasoning/Terra model | `gpt-5.6-terra` (`2026-07-09`) |
-| Container App | `clientsphere-95bc` |
-| Container Apps environment | `cae-clientsphere-95bc` |
-| Azure Container Registry | `acrclientsphere95bc` |
-| Key Vault | `kv-clientsphere-95bc` |
-| Application Insights | `appi-clientsphere-95bc` |
-| Log Analytics | `log-clientsphere-95bc` |
+| General/Sol model | `gpt-5.6-sol` |
+| Multimodal/Luna model | `gpt-5.6-luna` |
+| Reasoning/Terra model | `gpt-5.6-terra` |
+| Container App | `clientsphere-<suffix>` |
+| Container Apps environment | `cae-clientsphere-<suffix>` |
+| Azure Container Registry | `acrclientsphere<suffix>` |
+| Key Vault | `kv-clientsphere-<suffix>` |
+| Application Insights | `appi-clientsphere-<suffix>` |
+| Log Analytics | `log-clientsphere-<suffix>` |
 
-The Container App uses managed identity for Foundry, Speech, and private image pulls.
+The Container App uses its system-assigned managed identity for Foundry, Speech, private image pulls, and access-state persistence through the Azure management plane.
 
-## Deployment workflow
+## Workflow
 
-Every push to `main`:
+Every push or manual dispatch of `.github/workflows/deploy.yml`:
 
-1. Installs dependencies and runs syntax checks and tests.
-2. Compiles Bicep.
-3. Signs into Azure with GitHub OIDC.
-4. Creates or updates the Azure resources.
-5. Refreshes public customer research and Foundry agents when their definitions changed or metadata is absent.
-6. Compresses agent state into the Container App management-plane configuration and embeds full metadata in the image.
-7. Builds the image in Azure Container Registry and deploys it to Azure Container Apps Consumption.
-8. Verifies `/healthz` reports all 40 customers and 160 customer agent modes.
+1. validates JavaScript, tests, and Bicep;
+2. signs in through OIDC;
+3. creates or updates infrastructure;
+4. preserves encrypted access state and previous agent metadata;
+5. refreshes public research and agents when required;
+6. builds in Azure Container Registry;
+7. deploys to Azure Container Apps;
+8. applies OAuth and optional email configuration;
+9. verifies dynamic customer and agent-mode counts;
+10. deletes obsolete managed agents and vector stores.
 
-The weekly refresh workflow re-crawls official public sources, updates each vector store and agent, then builds and deploys a refreshed image.
+Pull requests run validation only. Deployment concurrency is serialized so two runs cannot mutate agent or access state simultaneously.
 
-## GitHub OAuth
-
-GitHub does not expose an API for creating OAuth Apps. Complete the one manual registration in [AUTH-SETUP.md](AUTH-SETUP.md), then run:
+Force a refresh:
 
 ```powershell
-.\scripts\configure-github-oauth.ps1 -ClientId "<id>" -ClientSecret "<secret>"
+gh workflow run deploy.yml --ref main -f refresh_customer_agents=true
 ```
 
-The script stores the credentials as repository secrets and triggers the deployment workflow. The workflow applies them as Container App secrets. Until that is complete, production shows a setup-pending sign-in page; simulated login is never exposed.
+The scheduled workflow dispatches the same production path every Monday at 05:00 UTC.
+
+## Deployment inputs
+
+Required repository variables:
+
+```text
+AZURE_CLIENT_ID
+AZURE_CLIENT_OBJECT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+AZURE_RESOURCE_GROUP
+AZURE_CONTAINER_APP_NAME
+AZURE_LOCATION
+AZURE_AI_LOCATION
+CLIENTSPHERE_SUFFIX
+ADMIN_LOGINS
+```
+
+Required secret:
+
+```text
+SESSION_SECRET
+```
+
+OAuth secrets:
+
+```text
+GH_OAUTH_CLIENT_ID
+GH_OAUTH_CLIENT_SECRET
+```
+
+Optional email values are documented in [EMAIL-WORKFLOW.md](EMAIL-WORKFLOW.md).

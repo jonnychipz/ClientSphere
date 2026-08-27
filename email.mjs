@@ -5,8 +5,8 @@ import { EmailClient } from "@azure/communication-email";
 
 const CONN = process.env.ACS_CONNECTION_STRING || "";
 const SENDER = process.env.EMAIL_SENDER || "";
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "johnlunn@microsoft.com";
-const ADMIN_NAME = process.env.ADMIN_NAME || "John Lunn";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
+const ADMIN_NAME = process.env.ADMIN_NAME || "ClientSphere administrator";
 
 export const EMAIL_ENABLED = !!(CONN && SENDER);
 const client = EMAIL_ENABLED ? new EmailClient(CONN) : null;
@@ -86,7 +86,7 @@ function shell(innerHtml, preheader = "") {
           </td>
           <td style="padding-left:12px;vertical-align:middle;">
             <div style="font-family:'Segoe UI',Arial;font-weight:800;letter-spacing:-0.4px;font-size:22px;color:${PURPLE_LT};">ClientSphere</div>
-            <div style="font-size:12px;color:#9a92b8;">Your AI GitHub sales coach</div>
+            <div style="font-size:12px;color:#9a92b8;">Your AI customer conversation coach</div>
           </td>
         </tr></table>
       </td></tr>
@@ -94,10 +94,7 @@ function shell(innerHtml, preheader = "") {
       <tr><td style="padding:18px 30px;border-top:1px solid rgba(139,92,246,0.2);background:#100b1c;">
         <div style="font-size:12px;color:#9a92b8;line-height:1.6;">
           <strong style="color:#c4b5fd;">Point of contact</strong><br/>
-          ${esc(ADMIN_NAME)} · Azure Specialist, Microsoft<br/>
-          <a href="mailto:${esc(ADMIN_EMAIL)}" style="color:${PURPLE_LT};text-decoration:none;">${esc(ADMIN_EMAIL)}</a> ·
-          <a href="https://github.com/jonnychipz" style="color:${PURPLE_LT};text-decoration:none;">@jonnychipz</a> ·
-          <a href="https://jonnychipz.com" style="color:${PURPLE_LT};text-decoration:none;">jonnychipz.com</a>
+          ${esc(ADMIN_NAME)}${ADMIN_EMAIL ? `<br/><a href="mailto:${esc(ADMIN_EMAIL)}" style="color:${PURPLE_LT};text-decoration:none;">${esc(ADMIN_EMAIL)}</a>` : ""}
         </div>
       </td></tr>
     </table>

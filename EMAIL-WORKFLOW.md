@@ -1,12 +1,20 @@
-# Optional approval email workflow
+# Optional approval email
 
-ClientSphere keeps Hubble's Azure Communication Services email integration in `email.mjs`, but email is disabled until these App Service settings are supplied:
+ClientSphere works without email; administrators can manage all requests at `/admin`.
 
-- `ACS_CONNECTION_STRING`
-- `EMAIL_SENDER`
-- `ADMIN_EMAIL`
-- `ADMIN_NAME`
+To enable transactional approval and decision email, create an Azure Communication Services Email resource with a verified sender, then set:
 
-Without them, access requests and decisions remain fully manageable in `/admin`; email failures never change an access decision.
+```powershell
+.\scripts\configure-email.ps1 `
+  -EmailSender "DoNotReply@<verified-domain>.azurecomm.net" `
+  -AdminEmail "<administrator-email>" `
+  -AdminName "<administrator-name>"
+```
 
-If enabled later, store the ACS connection string as a GitHub secret or Key Vault secret and apply it through a reviewed GitHub Actions workflow. Do not commit it.
+All four values are required together. The workflow stops with an explicit error when configuration is partial.
+
+The script requests the connection string through a masked secure prompt, sends it to GitHub through standard input, and starts the deployment. The connection string is applied as a Container App secret. Sender/admin metadata is applied as environment variables. None belongs in source control or shell history.
+
+Approval and deny links are two-step actions: a GET renders confirmation, and only an explicit POST applies the decision. This prevents email security scanners and link previewers from changing access.
+
+Email delivery failure never changes an access decision. The durable source of truth remains the admin dashboard and access registry.

@@ -2,18 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { customers, getCustomer, customerPublicView } from "../customer-registry.mjs";
 
-test("catalogue contains all Edge SME&C customer favourites", () => {
-  assert.equal(customers.length, 40);
-  assert.equal(new Set(customers.map((customer) => customer.id)).size, 40);
-  assert.equal(customers.some((customer) => customer.id === "cobham-satcom"), false);
-  assert.equal(customers.some((customer) => customer.id === "royal-kennel-club"), false);
+test("catalogue contains at least one uniquely identified customer", () => {
+  assert.ok(customers.length > 0);
+  assert.equal(new Set(customers.map((customer) => customer.id)).size, customers.length);
 });
 
 test("catalogue entries expose safe public fields", () => {
-  const customer = getCustomer("a-safe");
-  assert.equal(customer.name, "A-SAFE");
-  assert.equal(customer.domain, "asafe.com");
-  assert.equal(customer.logoUrl, "/customer-logos/a-safe");
+  const customer = customers[0];
+  assert.equal(getCustomer(customer.id), customer);
+  assert.equal(customer.domain, new URL(customer.website).hostname.replace(/^www\./, ""));
+  assert.equal(customer.logoUrl, `/customer-logos/${customer.id}`);
   assert.deepEqual(
     Object.keys(customerPublicView(customer)).sort(),
     ["domain", "id", "initials", "logoUrl", "name", "sector", "summary", "topics", "useCases", "website"].sort(),

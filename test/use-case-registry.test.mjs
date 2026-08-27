@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { customers, getCustomer } from "../customer-registry.mjs";
+import { customers } from "../customer-registry.mjs";
 import { buildCustomerUseCases } from "../use-case-registry.mjs";
 
 test("every customer receives three distinct latest-model use cases", () => {
@@ -24,9 +24,10 @@ test("every customer receives three distinct latest-model use cases", () => {
 });
 
 test("sector mapping creates recognisably tailored demonstrations", () => {
-  assert.equal(buildCustomerUseCases(getCustomer("a-safe"))[0].id, "visual-safety");
-  assert.equal(buildCustomerUseCases(getCustomer("jellycat"))[0].id, "product-concierge");
-  assert.equal(buildCustomerUseCases(getCustomer("sgn"))[0].id, "field-integrity");
-  assert.equal(buildCustomerUseCases(getCustomer("itf"))[0].id, "participant-concierge");
-  assert.equal(buildCustomerUseCases(getCustomer("draken"))[0].id, "mission-readiness");
+  const fixture = (id, sector) => ({ id, name: id, website: "https://example.com", sector, summary: "Test", topics: ["Test"] });
+  assert.equal(buildCustomerUseCases(fixture("safety", "Industrial safety"))[0].id, "visual-safety");
+  assert.equal(buildCustomerUseCases(fixture("consumer", "Consumer products"))[0].id, "product-concierge");
+  assert.equal(buildCustomerUseCases(fixture("utility", "Gas networks"))[0].id, "field-integrity");
+  assert.equal(buildCustomerUseCases(fixture("sport", "International sport"))[0].id, "participant-concierge");
+  assert.equal(buildCustomerUseCases(fixture("aviation", "Aerospace and defence"))[0].id, "mission-readiness");
 });

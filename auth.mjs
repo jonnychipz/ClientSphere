@@ -8,7 +8,7 @@ const SECRET = process.env.SESSION_SECRET || "clientsphere-dev-secret-change-me"
 const COOKIE = "clientsphere_session";
 const MAX_AGE = 7 * 24 * 60 * 60; // 7 days (seconds)
 
-export const ADMIN_LOGINS = (process.env.ADMIN_LOGINS || "jonnychipz")
+export const ADMIN_LOGINS = (process.env.ADMIN_LOGINS || "")
   .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 export const isAdmin = (login) => !!login && ADMIN_LOGINS.includes(login.toLowerCase());
 

@@ -12,6 +12,10 @@ param suffix string = '95bc'
 @description('Object ID of the GitHub Actions service principal.')
 param deploymentPrincipalObjectId string
 
+@minLength(1)
+@description('Comma-separated GitHub logins allowed to bootstrap or recover administration.')
+param adminLogins string
+
 @secure()
 @description('Signing key used for application sessions.')
 param sessionSecret string
@@ -305,7 +309,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'ADMIN_LOGINS'
-              value: 'jonnychipz'
+              value: adminLogins
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

@@ -11,7 +11,9 @@ export function registrationDisposition(users, login, configuredAdminLogins = []
   const hasAdmin = approvedAdmins(allUsers).length > 0;
   const configured = configuredAdminLogins.map((value) => value.toLowerCase());
   const configuredBootstrap = configured.includes(login.toLowerCase());
-  const bootstrap = allUsers.length === 0 || (!hasAdmin && configuredBootstrap);
+  const bootstrap = configured.length
+    ? !hasAdmin && configuredBootstrap
+    : allUsers.length === 0;
   return {
     status: bootstrap ? "approved" : "pending",
     isAdmin: bootstrap,
