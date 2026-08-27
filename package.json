@@ -13,7 +13,7 @@
     "agents:provision": "node scripts/provision-customer-agents.mjs",
     "agents:cleanup": "node scripts/cleanup-obsolete-agents.mjs",
     "setup": "npm run customers:refresh && npm run agents:provision",
-    "check": "node --check server.mjs && node --check auth.mjs && node --check fabric-auth.mjs && node --check manufacturing-live.mjs && node --check store.mjs && node --check access-governance.mjs && node --check access-state.mjs && node --check customer-logo.mjs && node --check webgrounding.mjs && node --check thread-token.mjs && node --check use-case-registry.mjs && node --check multimodal-input.mjs && node --check scripts/validate-customers.mjs && node --check scripts/refresh-customer-content.mjs && node --check scripts/provision-customer-agents.mjs && node --check scripts/cleanup-obsolete-agents.mjs && node --check public/app.js && node --check public/admin.js",
+    "check": "node --check server.mjs && node --check auth.mjs && node --check fabric-auth.mjs && node --check manufacturing-live.mjs && node --check store.mjs && node --check access-governance.mjs && node --check access-state.mjs && node --check customer-logo.mjs && node --check agent-tooling.mjs && node --check response-rendering.mjs && node --check webgrounding.mjs && node --check thread-token.mjs && node --check use-case-registry.mjs && node --check multimodal-input.mjs && node --check scripts/validate-customers.mjs && node --check scripts/refresh-customer-content.mjs && node --check scripts/provision-customer-agents.mjs && node --check scripts/cleanup-obsolete-agents.mjs && node --check public/app.js && node --check public/admin.js",
     "test": "node --test",
     "start": "node server.mjs",
     "dev": "node --watch server.mjs"

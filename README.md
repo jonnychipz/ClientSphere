@@ -28,7 +28,7 @@ The AI-assisted prompt tells the agent to:
 ## What users can do
 
 - Search and switch between configured customers.
-- Ask for concise, evidence-led public intelligence.
+- Ask for concise, evidence-led public intelligence with Foundry Web Search for current customer-relevant information.
 - Open a structured customer brief with sources and dates.
 - Run three synthetic, sector-specific agent workflows per customer.
 - Query a governed live Fabric demo through one orchestrator and four domain specialists.
@@ -77,7 +77,7 @@ flowchart LR
 |---|---|
 | Web application | Node.js 22, Express, static browser UI |
 | AI | Azure AI Foundry project with GPT-5.6 Sol, Luna, and Terra deployments |
-| Knowledge | Official-site crawler, one isolated vector store per customer |
+| Knowledge | Official-site crawler, one isolated vector store per customer, and Foundry Web Search on general advisers |
 | Voice and avatar | Azure Speech with keyless token brokering |
 | Identity | GitHub OAuth plus ClientSphere's approved-user/admin registry; delegated Microsoft Entra identity for live Fabric |
 | Hosting | Azure Container Apps and Azure Container Registry |
@@ -190,4 +190,6 @@ Secure configuration helpers:
 
 ## Public-data boundary
 
-ClientSphere is designed for public-source intelligence. Runtime retrieval is restricted to the active customer's official domain and approved public registries, and private-network addresses are blocked. Agents are instructed to separate facts, inferences, synthetic demonstration data, and unknowns.
+ClientSphere is designed for public-source intelligence. Direct URL retrieval is restricted to the active customer's official domain and approved public registries, and private-network addresses are blocked. Agents are instructed to separate facts, inferences, synthetic demonstration data, and unknowns.
+
+General advisers also use Foundry Web Search for current public information. Search is relevance-gated to the selected customer; unrelated requests are declined and redirected to useful customer topics. Web Search is billable and sends search data to Grounding with Bing outside Azure compliance and geographic boundaries; the Microsoft DPA does not apply to that data path. Do not include secrets or private customer data in queries.

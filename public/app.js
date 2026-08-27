@@ -200,11 +200,22 @@ function addMessage(role, text, citations) {
   if (citations && citations.length) {
     const c = document.createElement("div");
     c.className = "cites";
-    citations.forEach((s) => {
-      const span = document.createElement("span");
-      span.className = "cite";
-      span.textContent = s;
-      c.appendChild(span);
+    citations.forEach((citation) => {
+      const label = typeof citation === "string"
+        ? citation
+        : citation?.label || citation?.url || "source";
+      const url = typeof citation === "object" && /^https?:\/\//i.test(citation?.url || "")
+        ? citation.url
+        : "";
+      const node = document.createElement(url ? "a" : "span");
+      node.className = url ? "cite web" : "cite";
+      node.textContent = label;
+      if (url) {
+        node.href = url;
+        node.target = "_blank";
+        node.rel = "noopener noreferrer";
+      }
+      c.appendChild(node);
     });
     bubble.appendChild(c);
   }
@@ -1013,9 +1024,12 @@ function generalModeDefinition() {
     icon: "compass",
     modelLabel: "GPT-5.6 Sol",
     supportsImages: true,
-    summary: `Fast, source-grounded conversation about ${state.customer.name}'s business, strategy, products, financial context, leadership, and recent developments.`,
+    summary: `Fast, source-grounded conversation with live web search for current ${state.customer.name} business, strategy, market, leadership, and news.`,
     businessValue: "Executive customer understanding and meeting coaching.",
-    prompts: state.customer.topics.slice(0, 3).map((topic) => `Brief me on ${topic.toLowerCase()} for ${state.customer.name}.`),
+    prompts: [
+      `Search for the latest verified developments about ${state.customer.name}.`,
+      ...state.customer.topics.slice(0, 2).map((topic) => `Brief me on ${topic.toLowerCase()} for ${state.customer.name}.`),
+    ],
     workflow: [],
   };
 }
@@ -1124,8 +1138,9 @@ function renderAgentModes() {
     : [
       active.modelLabel || "GPT-5.6",
       active.supportsImages ? "Multimodal" : "Text + web",
-      "Public web grounded",
-      ...(active.id === "general" ? [] : ["Code Interpreter"]),
+      ...(active.id === "general"
+        ? ["Foundry Web Search"]
+        : ["Guarded public sources", "Code Interpreter"]),
     ];
   if (isLive) {
       const starters = liveStarters(active);
@@ -1176,7 +1191,7 @@ function renderAgentModes() {
       : "";
     const workflow = active.workflow?.length
       ? `<div class="agent-workflow"><details><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>${sampleDataMarkup}</div>`
-      : `<div class="agent-workflow"><details><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details></div>`;
+      : `<div class="agent-workflow"><details><summary>General coaching scope</summary><ol><li>Check customer relevance</li><li>Search the live web when current evidence helps</li><li>Cite material claims</li><li>Redirect unrelated questions</li></ol></details></div>`;
     els.agentModeDetail.innerHTML =
       `<div class="agent-detail-copy"><p>${escapeHtml(active.businessValue)}</p>` +
       `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +

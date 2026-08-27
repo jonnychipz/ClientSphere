@@ -176,7 +176,7 @@ jobs:
           base="${{ github.event.before }}"
           if [[ "${{ github.event_name }}" == "push" && -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
             git fetch --no-tags --depth=1 origin "$base"
-            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs use-case-registry.mjs manufacturing-live.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
+            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs agent-tooling.mjs use-case-registry.mjs manufacturing-live.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
               changed=true
             fi
           elif [[ "${{ github.event_name }}" == "push" ]]; then

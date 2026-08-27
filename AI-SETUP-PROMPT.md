@@ -59,9 +59,10 @@ NON-NEGOTIABLE SAFETY AND DATA RULES
 4. Use public information only. Do not put private emails, internal account notes, CRM data, opportunity data, credentials, or customer-confidential information into the catalogue, prompts, screenshots, tests, or Markdown.
 5. Never print, paste, log, commit, or place a secret in a command-line argument. Use the repository SecureString/stdin helper scripts for OAuth and email. Keep .env, data/, knowledge/customers/, and customer-agents.json untracked.
 6. Use managed identity and immutable repository-ID-bound GitHub OIDC. Do not create a deployment service-principal client secret, publish profile, registry password, Azure AI key, or Speech key. A separate delegated Entra application secret is permitted only for the optional live Fabric user sign-in and must be stored through the secure helper.
-7. Preserve unrelated user changes and untracked files. Stage and commit only files changed for this repurposing.
-8. Do not delete Azure resources, GitHub environments, users, agents, or vector stores unless the repository workflow explicitly manages obsolete ClientSphere assets and the replacement deployment has passed.
-9. Do not claim completion until tests, deployment, OAuth, administrator access, customer counts, and /healthz are verified.
+7. Preserve Foundry Web Search on general advisers only. Keep the customer relevance gate, do not attach unrestricted Web Search to synthetic or live Fabric modes, and never send private data in a search query.
+8. Preserve unrelated user changes and untracked files. Stage and commit only files changed for this repurposing.
+9. Do not delete Azure resources, GitHub environments, users, agents, or vector stores unless the repository workflow explicitly manages obsolete ClientSphere assets and the replacement deployment has passed.
+10. Do not claim completion until tests, deployment, OAuth, administrator access, customer counts, and /healthz are verified.
 
 PHASE 1 - DISCOVER AND PREFLIGHT
 1. Read README.md, AI-SETUP-PROMPT.md, SELF-HOSTING.md, config/customers.json, package.json, infra/main.bicep, .github/workflows/deploy.yml, .env.example, scripts/bootstrap-github-oidc.ps1, scripts/configure-github-oauth.ps1, instructions.mjs, use-case-registry.mjs, auth.mjs, and all Markdown files.
@@ -69,6 +70,7 @@ PHASE 1 - DISCOVER AND PREFLIGHT
 3. Require Node.js 22+, Git, PowerShell 7, Azure CLI, and GitHub CLI. Install only missing project dependencies with npm ci.
 4. If the target repository is a fork, ensure origin points to my repository, not the source/upstream repository.
 5. Confirm the target supports the configured GPT-5.6 Sol, Luna, and Terra model version/capacity in the selected AI region. If not, present the smallest valid model/region change and wait for my decision; do not silently substitute.
+6. Confirm `OpenAI.BlockedTools.web_search` is not registered in the target subscription. If Web Search is blocked by policy, report that clearly rather than removing the tool or weakening the prompt.
 
 PHASE 2 - REPLACE AND TAILOR THE CUSTOMER PORTFOLIO
 1. Build a new config/customers.json containing only my customers.

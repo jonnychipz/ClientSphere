@@ -34,6 +34,8 @@ The default regions are:
 
 Confirm that your subscription can deploy these models in the chosen AI region. If it cannot, see [Changing regions or models](#changing-regions-or-models) before the first deployment.
 
+General advisers use Foundry Web Search for current public customer information. The tool needs no separate Bing resource but is billable and may be disabled by subscription policy. It sends search data to Grounding with Bing outside Azure compliance and geographic boundaries; the Microsoft DPA does not apply to that data path. Never place secrets or private customer data in prompts.
+
 ## Prerequisites
 
 Install:

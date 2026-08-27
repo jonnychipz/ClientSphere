@@ -9,12 +9,12 @@ import { DefaultAzureCredential } from "@azure/identity";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerInstructions, buildUseCaseInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
 import { buildCustomerSyntheticUseCases, getGeneralModelDeployment } from "../use-case-registry.mjs";
+import { buildCustomerAgentTools } from "../agent-tooling.mjs";
 import {
   MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
   MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS,
   MANUFACTURING_TOOLBOX_CONNECTION_NAME, MANUFACTURING_TOOLBOX_NAME,
 } from "../manufacturing-live.mjs";
-import { FETCH_DOC_TOOL } from "../webgrounding.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const endpoint = process.env.PROJECT_ENDPOINT;
@@ -46,17 +46,6 @@ for await (const store of openAI.vectorStores.list({ limit: 100, order: "desc" }
 if (fs.existsSync(outputPath)) {
   previousMetadata = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 }
-
-const functionTool = {
-  type: "function",
-  name: FETCH_DOC_TOOL.name,
-  description: FETCH_DOC_TOOL.description,
-  strict: true,
-  parameters: {
-    ...FETCH_DOC_TOOL.parameters,
-    additionalProperties: false,
-  },
-};
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -171,13 +160,10 @@ async function upsertAgent({
     kind: "prompt",
     model: modelDeployment,
     instructions,
-    tools: tools || [
-      { type: "file_search", vector_store_ids: [vectorStoreId] },
-      functionTool,
-      ...(mode === "general" || mode === "portfolio"
-        ? []
-        : [{ type: "code_interpreter", container: { type: "auto" } }]),
-    ],
+    tools: tools || buildCustomerAgentTools(vectorStoreId, {
+      enableWebSearch: mode === "general",
+      enableCodeInterpreter: mode !== "general" && mode !== "portfolio",
+    }),
   };
   const options = {
     description,

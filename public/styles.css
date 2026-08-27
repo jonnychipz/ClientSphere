@@ -817,6 +817,9 @@ select {
   padding: 3px 9px; border-radius: 999px;
 }
 .cite::before { content: "📄 "; }
+.cite.web { color: #c4b5fd; text-decoration: none; }
+.cite.web::before { content: "↗ "; }
+.cite.web:hover { border-color: var(--accent-2); color: #fff; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .chip {

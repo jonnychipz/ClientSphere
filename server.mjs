@@ -19,6 +19,7 @@ import {
 import { resolveCustomerLogo } from "./customer-logo.mjs";
 import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
 import { buildAgentInput } from "./multimodal-input.mjs";
+import { renderAgentResponse } from "./response-rendering.mjs";
 import {
   DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
@@ -80,12 +81,6 @@ if (!liveManufacturingReady) {
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(ENDPOINT, credential);
 const openAI = project.getOpenAIClient();
-
-const prettySource = (name) =>
-  (name || "knowledge base")
-    .replace(/^\d+-/, "")
-    .replace(/\.md$/, "")
-    .replace(/-/g, " ");
 
 // ---- Voice + avatar catalogue offered in the UI ----
 // Each voice is paired with a distinct avatar BODY (Azure standard avatar
@@ -957,39 +952,8 @@ app.get("/api/relay-token", requireApproved(async (req, res) => {
   }
 }));
 
-// Extract assistant text + citations from the latest assistant message
-function renderResponse(response, fileMap) {
-  let text = response.output_text || "";
-  let collectedText = "";
-  const citations = [];
-  const seen = new Set();
-  for (const item of response.output || []) {
-    if (item.type !== "message") continue;
-    for (const part of item.content || []) {
-      if (part.type !== "output_text") continue;
-      collectedText += part.text || "";
-      for (const annotation of part.annotations || []) {
-        if (annotation.type !== "file_citation") continue;
-        const source = prettySource(fileMap[annotation.file_id] || annotation.filename);
-        if (!seen.has(source)) {
-          seen.add(source);
-          citations.push(source);
-        }
-      }
-    }
-  }
-  if (!text) text = collectedText;
   // Strip file_search citation markers (【4:2†source】) cleanly by pattern only.
-  text = text
-    .replace(/\u3010[^\u3011]*\u3011/g, "") // full 【...】 tokens
-    .replace(/[\u3010\u3011]/g, "")          // any orphan brackets
-    .replace(/\[\d+\]/g, "")
-    .replace(/ {2,}/g, " ")
-    .replace(/ +([.,;:])/g, "$1")
-    .replace(/\n{3,}/g, "\n\n");
-  return { text: text.trim(), citations };
-}
-
+// Response text and both file/web citations are normalized after this call.
 async function runAgent(previousResponseId, agentName, customer, input, options = {}) {
   const responseClient = options.openAIClient || openAI;
   const agentReference = { name: agentName, type: "agent_reference" };
@@ -1095,7 +1059,7 @@ app.post("/api/chat", requireApproved(async (req, res) => {
         detail: response.error?.message || response.incomplete_details?.reason,
       });
     }
-    const { text: reply, citations } = renderResponse(response, customerMetadata.fileMap || {});
+    const { text: reply, citations } = renderAgentResponse(response, customerMetadata.fileMap || {});
     // Capture usage (don't log raw system directives verbatim — just the kind).
     const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
     logUsage(req.authUser.login, "chat", `${customer.id}:${agentMode}:${agentContext || kind}`);

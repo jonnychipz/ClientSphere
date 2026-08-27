@@ -117,6 +117,14 @@ Optional email values are documented in [EMAIL-WORKFLOW.md](EMAIL-WORKFLOW.md).
 
 Optional custom avatar/voice repository variables are managed by `scripts/configure-custom-avatar.ps1` and applied as Container App environment values by Bicep. They remain disabled by default; see [custom-avatar/README.md](custom-avatar/README.md).
 
+## Foundry Web Search
+
+Every customer general adviser is provisioned with the built-in `web_search` tool alongside its isolated file search and guarded official-source fetch. Synthetic use-case agents and shared Fabric live agents do not receive unrestricted Web Search.
+
+No separate Bing resource or project connection is required. An Azure administrator can block the tool at subscription level through `Microsoft.CognitiveServices/OpenAI.BlockedTools.web_search`; a blocked subscription causes live search calls to fail rather than silently falling back.
+
+Web Search is billable and sends search data to Grounding with Bing outside Azure compliance and geographic boundaries; the Microsoft Data Protection Addendum does not apply to that data path. Prompts must never send secrets, private account data, or customer-confidential content to Web Search.
+
 ## Completion criteria
 
 A base deployment is complete when:

@@ -20,6 +20,7 @@ ClientSphere turns a portfolio of public customer information into a focused con
 |---|---|
 | Prepare | Select a customer and build an evidence-led public brief |
 | Explore | Ask questions with citations and clear uncertainty |
+| Stay current | Search the public web for recent customer-relevant facts and developments |
 | Demonstrate | Run three tailored synthetic workflows or query the shared live Fabric shopfloor experience |
 | Rehearse | Practise a customer conversation and receive coaching |
 | Present | Use brief voice/avatar turns or structured screen-first artefacts |
@@ -60,4 +61,5 @@ A fork is not complete until it has:
 4. preserved one general, three synthetic use cases, and the shared live Fabric mode per customer;
 5. configured its own Azure/GitHub identity and administrator;
 6. rewritten all documentation for its actual audience and customer sectors;
-7. passed the dynamic customer/agent smoke test.
+7. passed the dynamic customer/agent smoke test;
+8. preserved the customer relevance gate and Web Search only on general advisers.
