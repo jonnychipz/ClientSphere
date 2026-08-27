@@ -20,3 +20,26 @@ test("thread token rejects customer relabelling, user changes, and tampering", (
   assert.equal(verifyThreadToken(token, { customerId: "customer-one", agentMode: "visual-safety", userLogin: "other-user" }, secret), null);
   assert.equal(verifyThreadToken(`${token}x`, { customerId: "customer-one", agentMode: "visual-safety", userLogin: "portfolio-admin" }, secret), null);
 });
+
+test("thread token binds live specialist context", () => {
+  const live = { ...input, agentMode: "manufacturing-live", agentContext: "quality" };
+  const token = createThreadToken(live, secret);
+  assert.equal(
+    verifyThreadToken(token, {
+      customerId: live.customerId,
+      agentMode: live.agentMode,
+      agentContext: "quality",
+      userLogin: live.userLogin,
+    }, secret),
+    live.threadId,
+  );
+  assert.equal(
+    verifyThreadToken(token, {
+      customerId: live.customerId,
+      agentMode: live.agentMode,
+      agentContext: "reliability",
+      userLogin: live.userLogin,
+    }, secret),
+    null,
+  );
+});

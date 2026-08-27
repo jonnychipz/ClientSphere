@@ -1,3 +1,5 @@
+import { buildManufacturingLiveUseCase } from "./manufacturing-live.mjs";
+
 const MODEL_DEPLOYMENTS = {
   general: process.env.GENERAL_MODEL_DEPLOYMENT || process.env.MODEL_DEPLOYMENT || "gpt-5.6-sol",
   luna: process.env.USE_CASE_MODEL_LUNA || "gpt-5.6-luna",
@@ -444,9 +446,16 @@ function enrichUseCase(template, customer) {
   };
 }
 
-export function buildCustomerUseCases(customer) {
+export function buildCustomerSyntheticUseCases(customer) {
   const cluster = CLUSTER_RULES.find((rule) => rule.pattern.test(customer.sector))?.useCases || DEFAULT;
   return cluster.map((template) => Object.freeze(enrichUseCase(template, customer)));
+}
+
+export function buildCustomerUseCases(customer) {
+  return [
+    ...buildCustomerSyntheticUseCases(customer),
+    buildManufacturingLiveUseCase(customer),
+  ];
 }
 
 export function getCustomerUseCase(customer, useCaseId) {

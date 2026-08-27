@@ -541,3 +541,4 @@ output containerRegistryServer string = containerRegistry.properties.loginServer
 output projectEndpoint string = 'https://${foundry.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
 output foundryAccountName string = foundry.name
 output foundryProjectName string = foundryProject.name
+output foundryProjectResourceId string = foundryProject.id

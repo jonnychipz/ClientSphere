@@ -40,6 +40,8 @@ MY INPUTS
 - Product website (optional): <PRODUCT_WEBSITE>
 - Enable approval email? yes/no: <EMAIL_ENABLED>
 - Enable a custom avatar/voice now? yes/no: <CUSTOM_AVATAR_ENABLED>
+- Enable the shared live Fabric mode now? yes/no: <LIVE_FABRIC_ENABLED>
+- Four published Fabric Data Agent workspace/artifact IDs, when enabled: <LIVE_FABRIC_DATA_AGENTS>
 
 CUSTOMERS
 Replace the example below with my complete customer list. Accept JSON, CSV-like rows, or plain text. If only a customer name is supplied, research and confirm the official HTTPS website before writing it. Never guess an ambiguous organisation or domain.
@@ -56,7 +58,7 @@ NON-NEGOTIABLE SAFETY AND DATA RULES
 3. Treat all existing customers as sample/current-owner data. Replace the entire config/customers.json array; do not merge my customers with it.
 4. Use public information only. Do not put private emails, internal account notes, CRM data, opportunity data, credentials, or customer-confidential information into the catalogue, prompts, screenshots, tests, or Markdown.
 5. Never print, paste, log, commit, or place a secret in a command-line argument. Use the repository SecureString/stdin helper scripts for OAuth and email. Keep .env, data/, knowledge/customers/, and customer-agents.json untracked.
-6. Use managed identity and immutable repository-ID-bound GitHub OIDC. Do not create an Azure client secret, publish profile, registry password, Azure AI key, or Speech key.
+6. Use managed identity and immutable repository-ID-bound GitHub OIDC. Do not create a deployment service-principal client secret, publish profile, registry password, Azure AI key, or Speech key. A separate delegated Entra application secret is permitted only for the optional live Fabric user sign-in and must be stored through the secure helper.
 7. Preserve unrelated user changes and untracked files. Stage and commit only files changed for this repurposing.
 8. Do not delete Azure resources, GitHub environments, users, agents, or vector stores unless the repository workflow explicitly manages obsolete ClientSphere assets and the replacement deployment has passed.
 9. Do not claim completion until tests, deployment, OAuth, administrator access, customer counts, and /healthz are verified.
@@ -78,7 +80,7 @@ PHASE 2 - REPLACE AND TAILOR THE CUSTOMER PORTFOLIO
    - one-sentence public summary;
    - 4-8 useful public-intelligence topics.
 3. Resolve duplicate IDs and reject duplicate or ambiguous organisations.
-4. Check how each sector maps in use-case-registry.mjs. Add or improve sector mappings only where needed so every customer receives three credible, distinct scenarios. Keep exactly one general mode plus three use-case modes per customer unless you intentionally update all dependent UI, tests, and smoke-count logic.
+4. Check how each sector maps in use-case-registry.mjs. Add or improve sector mappings only where needed so every customer receives three credible, distinct scenarios. Preserve one general mode, three synthetic modes, and the shared live Fabric mode unless you intentionally update all dependent UI, tests, and smoke-count logic.
 5. Keep synthetic scenario records clearly labelled synthetic. Do not invent real customer results, incidents, financials, or endorsements.
 6. Update tests so they validate portable catalogue behavior and sector fixtures, never the previous owner's exact customers or customer count.
 
@@ -136,7 +138,8 @@ PHASE 6 - COMMIT, PUSH, DEPLOY, AND MONITOR
    - status is ok;
    - customers equals config/customers.json length;
    - agentsConfigured equals that customer count;
-   - agentModesConfigured equals four times that customer count.
+   - agentModesConfigured equals five times that customer count;
+   - when LIVE_FABRIC_ENABLED=yes, liveFabricAgentsConfigured is 4, liveOrchestratorConfigured is true, and fabricAuthConfigured is true.
 
 PHASE 7 - COMPLETE IDENTITY AND ADMINISTRATION
 1. GitHub OAuth App creation may require my interactive GitHub approval. If it does:
@@ -144,10 +147,11 @@ PHASE 7 - COMPLETE IDENTITY AND ADMINISTRATION
    - open the correct GitHub registration page when browser control is available;
    - never expose or retain the generated client secret.
 2. After I create the OAuth App, run scripts/configure-github-oauth.ps1 and let it request values through masked prompts. Watch the deployment it dispatches.
-3. Have me sign in with a login listed in ADMIN_LOGINS. Verify it becomes the first approved administrator and /admin opens.
-4. Explain that all later users start pending, how to approve/promote them, and how to hand ownership to another admin without removing the sole administrator.
-5. If EMAIL_ENABLED=yes, run scripts/configure-email.ps1 using non-secret metadata arguments and its masked connection-string prompt. If no, leave all four email values unset.
-6. If CUSTOM_AVATAR_ENABLED=yes, do not fabricate approval or consent. Follow custom-avatar/README.md and stop for the required Limited Access, consent recording, training, and deployment steps.
+3. If LIVE_FABRIC_ENABLED=yes, ensure the four Fabric Data Agents are published and the four exact Microsoft Fabric connections in SELF-HOSTING.md exist. Assign every delegated user or group **Foundry Agent Consumer** on the project plus direct access to the Fabric Data Agents and sources. Register a single-tenant Entra web application with the exact `/auth/fabric/callback`, delegated Azure AI Foundry `user_impersonation`, and required consent. Run scripts/configure-live-fabric.ps1 so its masked prompt stores the client secret and triggers a full refresh.
+4. Have me sign in with a login listed in ADMIN_LOGINS. Verify it becomes the first approved administrator and /admin opens.
+5. Explain that all later users start pending, how to approve/promote them, and how to hand ownership to another admin without removing the sole administrator.
+6. If EMAIL_ENABLED=yes, run scripts/configure-email.ps1 using non-secret metadata arguments and its masked connection-string prompt. If no, leave all four email values unset.
+7. If CUSTOM_AVATAR_ENABLED=yes, do not fabricate approval or consent. Follow custom-avatar/README.md and stop for the required Limited Access, consent recording, training, and deployment steps.
 
 FINAL HANDOFF
 Return:

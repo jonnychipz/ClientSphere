@@ -39,7 +39,7 @@ With suffix `<suffix>`, `infra/main.bicep` creates:
 | Application Insights | `appi-clientsphere-<suffix>` |
 | Log Analytics | `log-clientsphere-<suffix>` |
 
-The Container App uses its system-assigned managed identity for Foundry, Speech, private image pulls, and access-state persistence through the Azure management plane.
+The Container App uses its system-assigned managed identity for existing Foundry agents, Speech, private image pulls, and access-state persistence. The live Fabric mode separately uses a short-lived delegated Microsoft Entra user token because the native Foundry Fabric Data Agent tool does not support application-only managed identity authentication.
 
 ```mermaid
 flowchart TD
@@ -67,8 +67,8 @@ Every push or manual dispatch of `.github/workflows/deploy.yml`:
 5. refreshes public research and agents when required;
 6. builds in Azure Container Registry;
 7. deploys to Azure Container Apps;
-8. applies OAuth and optional email configuration;
-9. verifies dynamic customer and agent-mode counts;
+8. applies OAuth, optional delegated Microsoft Entra, and optional email configuration;
+9. verifies dynamic customer, agent-mode, live-agent, and identity counts;
 10. deletes obsolete managed agents and vector stores.
 
 Pull requests run validation only. Deployment concurrency is serialized so two runs cannot mutate agent or access state simultaneously.
@@ -104,6 +104,8 @@ Required secret:
 SESSION_SECRET
 ```
 
+The live Fabric mode additionally requires repository variable `ENTRA_CLIENT_ID`, secret `ENTRA_CLIENT_SECRET`, the four named Microsoft Fabric project connections, and **Foundry Agent Consumer** on the project for every delegated user or user group. Run `scripts/configure-live-fabric.ps1` after the base application and connections exist; it stores the identity values securely and dispatches a full agent refresh.
+
 OAuth secrets:
 
 ```text
@@ -117,11 +119,13 @@ Optional custom avatar/voice repository variables are managed by `scripts/config
 
 ## Completion criteria
 
-A deployment is complete only when:
+A base deployment is complete when:
 
 - the workflow conclusion is `success`;
 - `/healthz` returns `status: "ok"`;
 - `customers` and `agentsConfigured` match `config/customers.json`;
-- `agentModesConfigured` is four times the customer count;
+- `agentModesConfigured` is five times the customer count;
 - GitHub OAuth returns to the deployed `/auth/callback`;
 - the configured bootstrap login can open `/admin`.
+
+For a live-Fabric deployment, `liveFabricAgentsConfigured` must also be four, `liveOrchestratorConfigured` must be true, and `fabricAuthConfigured` must be true.

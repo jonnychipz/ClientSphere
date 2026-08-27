@@ -8,15 +8,21 @@ import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerInstructions, buildUseCaseInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
-import { buildCustomerUseCases, getGeneralModelDeployment } from "../use-case-registry.mjs";
+import { buildCustomerSyntheticUseCases, getGeneralModelDeployment } from "../use-case-registry.mjs";
+import {
+  MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
+  MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS,
+} from "../manufacturing-live.mjs";
 import { FETCH_DOC_TOOL } from "../webgrounding.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const endpoint = process.env.PROJECT_ENDPOINT;
+const projectResourceId = process.env.FOUNDRY_PROJECT_RESOURCE_ID;
 const generalModel = getGeneralModelDeployment();
 const knowledgeRoot = path.join(root, "knowledge", "customers");
 const outputPath = path.join(root, "customer-agents.json");
 if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
+if (!projectResourceId) throw new Error("FOUNDRY_PROJECT_RESOURCE_ID is required.");
 
 const credential = new DefaultAzureCredential();
 const project = new AIProjectClient(endpoint, credential);
@@ -157,12 +163,14 @@ async function upsertAgent({
   modelDeployment,
   mode,
   vectorStoreId,
+  tools,
+  extraMetadata = {},
 }) {
   const definition = {
     kind: "prompt",
     model: modelDeployment,
     instructions,
-    tools: [
+    tools: tools || [
       { type: "file_search", vector_store_ids: [vectorStoreId] },
       functionTool,
       ...(mode === "general" || mode === "portfolio"
@@ -176,12 +184,78 @@ async function upsertAgent({
       clientsphereCustomerId: customerId,
       clientsphereMode: mode,
       clientsphereManaged: "true",
+      ...extraMetadata,
     },
   };
   const agent = existingAgents.has(name)
     ? await project.agents.update(name, definition, options)
     : await project.agents.create(name, definition, options);
   return agent;
+}
+
+async function enableIncomingA2A(specialist) {
+  const access = await credential.getToken("https://ai.azure.com/.default");
+  const response = await fetch(`${endpoint}/agents/${encodeURIComponent(specialist.agentName)}?api-version=v1`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${access.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      agent_card: {
+        version: "1.0",
+        description: specialist.description,
+        skills: [{
+          id: specialist.id,
+          name: specialist.name,
+          description: specialist.summary,
+        }],
+      },
+      agent_endpoint: {
+        protocol_configuration: {
+          responses: {},
+          a2a: {},
+        },
+      },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not enable A2A for ${specialist.name}: ${response.status} ${await response.text()}`);
+  }
+}
+
+async function ensureA2AConnection(specialist) {
+  const access = await credential.getToken("https://management.azure.com/.default");
+  const target = `${endpoint}/agents/${specialist.agentName}/endpoint/protocols/a2a`;
+  const response = await fetch(
+    `https://management.azure.com${projectResourceId}/connections/${specialist.a2aConnectionName}?api-version=2025-04-01-preview`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${access.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: specialist.a2aConnectionName,
+        type: "Microsoft.MachineLearningServices/workspaces/connections",
+        properties: {
+          authType: "UserEntraToken",
+          group: "ServicesAndApps",
+          category: "RemoteA2A",
+          target,
+          audience: "https://ai.azure.com",
+          isSharedToAll: true,
+          sharedUserList: [],
+          Credentials: {},
+          metadata: { ApiType: "Azure" },
+        },
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Could not create A2A connection for ${specialist.name}: ${response.status} ${await response.text()}`);
+  }
+  return project.connections.get(specialist.a2aConnectionName);
 }
 
 async function cleanupStores(previousStoreIds, currentStoreId) {
@@ -206,6 +280,7 @@ const metadata = {
   },
   apiSurface: "foundry-v1",
   portfolio: null,
+  liveManufacturing: null,
   customers: {},
 };
 
@@ -228,7 +303,7 @@ for (const customer of customers) {
     vectorStoreId: store.id,
   });
   const useCaseAgents = {};
-  for (const useCase of buildCustomerUseCases(customer)) {
+  for (const useCase of buildCustomerSyntheticUseCases(customer)) {
     console.log(`  Creating ${useCase.name}...`);
     const useCaseAgentName = `clientsphere-${customer.id}-uc-${useCase.id}`;
     const useCaseAgent = await upsertAgent({
@@ -271,6 +346,94 @@ for (const customer of customers) {
   };
 }
 
+console.log("Checking shared live manufacturing connections...");
+const liveConnections = new Map();
+const missingLiveConnections = [];
+for (const specialist of MANUFACTURING_SPECIALISTS) {
+  try {
+    const connection = await project.connections.get(specialist.connectionName);
+    if (!connection?.id) {
+      throw new Error(`Foundry connection '${specialist.connectionName}' has no resource ID.`);
+    }
+    liveConnections.set(specialist.connectionName, connection);
+  } catch (error) {
+    const missing = error.statusCode === 404 ||
+      error.status === 404 ||
+      /not found|does not exist/i.test(error.message || "");
+    if (!missing) {
+      throw new Error(`Could not read Foundry connection '${specialist.connectionName}': ${error.message}`);
+    }
+    missingLiveConnections.push(specialist.connectionName);
+  }
+}
+
+if (missingLiveConnections.length) {
+  console.warn(
+    `Live Fabric agent provisioning skipped; create these Foundry Microsoft Fabric connections and rerun with refresh enabled: ${missingLiveConnections.join(", ")}.`,
+  );
+} else {
+  console.log("Provisioning shared live manufacturing specialists...");
+  const liveAgents = {};
+  const a2aTools = [];
+  for (const specialist of MANUFACTURING_SPECIALISTS) {
+    const connection = liveConnections.get(specialist.connectionName);
+    const agent = await upsertAgent({
+      customerId: "shared-manufacturing",
+      name: specialist.agentName,
+      description: specialist.description,
+      instructions: specialist.instructions,
+      modelDeployment: generalModel,
+      mode: MANUFACTURING_LIVE_MODE_ID,
+      tools: [{
+        type: "fabric_dataagent_preview",
+        fabric_dataagent_preview: {
+          project_connections: [{ project_connection_id: connection.id }],
+        },
+      }],
+      extraMetadata: { clientsphereSpecialist: specialist.id },
+    });
+    liveAgents[specialist.id] = {
+      agentName: specialist.agentName,
+      agentVersion: agent.versions.latest.version,
+      agentId: agent.versions.latest.id,
+      model: generalModel,
+      connectionName: specialist.connectionName,
+      connectionId: connection.id,
+    };
+    await enableIncomingA2A(specialist);
+    const a2aConnection = await ensureA2AConnection(specialist);
+    a2aTools.push({
+      type: "a2a_preview",
+      project_connection_id: a2aConnection.id,
+    });
+    liveAgents[specialist.id].a2aConnectionName = specialist.a2aConnectionName;
+    liveAgents[specialist.id].a2aConnectionId = a2aConnection.id;
+    console.log(`  ${specialist.name}: ${agent.versions.latest.id}`);
+  }
+
+  const orchestrator = await upsertAgent({
+    customerId: "shared-manufacturing",
+    name: MANUFACTURING_ORCHESTRATOR_NAME,
+    description: "Routes one ClientSphere live conversation across four Foundry specialists backed by four Fabric Data Agents.",
+    instructions: MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
+    modelDeployment: generalModel,
+    mode: MANUFACTURING_LIVE_MODE_ID,
+    tools: a2aTools,
+    extraMetadata: { clientsphereRole: "orchestrator" },
+  });
+  metadata.liveManufacturing = {
+    modeId: MANUFACTURING_LIVE_MODE_ID,
+    orchestrator: {
+      agentName: MANUFACTURING_ORCHESTRATOR_NAME,
+      agentVersion: orchestrator.versions.latest.version,
+      agentId: orchestrator.versions.latest.id,
+      model: generalModel,
+      toolCount: a2aTools.length,
+    },
+    agents: liveAgents,
+  };
+}
+
 console.log("Provisioning generic portfolio guide...");
 const portfolioFiles = [
   { path: path.join(root, "config", "customers.json"), label: "ClientSphere customer catalogue" },
@@ -309,4 +472,5 @@ metadata.portfolio = {
 
 const payload = Buffer.from(JSON.stringify(metadata, null, 2));
 fs.writeFileSync(outputPath, payload);
-console.log(`Provisioned ${customers.length} customer agents plus the portfolio guide.`);
+const liveAgentCount = Object.keys(metadata.liveManufacturing?.agents || {}).length;
+console.log(`Provisioned ${customers.length} customer agent sets, ${liveAgentCount} shared live Fabric specialists, and the portfolio guide.`);

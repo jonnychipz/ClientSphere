@@ -15,6 +15,7 @@ After completing the guide, you will have:
 - your own GitHub repository and deployment workflow;
 - a uniquely named Azure resource set;
 - your own public customer catalogue and isolated Foundry agents;
+- an optional shared live-manufacturing mode using four published Fabric Data Agents;
 - GitHub OAuth sign-in;
 - your GitHub login as the initial ClientSphere administrator;
 - weekly public-intelligence and agent refreshes;
@@ -126,7 +127,7 @@ npm run check
 npm test
 ```
 
-The validation output reports `4 x customer count` agent modes: one general adviser and three use-case agents per customer.
+The validation output reports `5 x customer count` visible modes: one general adviser, three synthetic use cases, and the shared live Fabric mode.
 
 Generated content is intentionally absent from source control:
 
@@ -251,7 +252,7 @@ The `Validate and deploy ClientSphere` workflow will:
 2. sign in to Azure using OIDC;
 3. create or update Azure resources;
 4. crawl each official customer website;
-5. create one isolated vector store and four agent modes per customer;
+5. create one isolated vector store and four customer-specific agents per customer, plus the shared live mode when its four Fabric connections exist;
 6. build the application image in Azure Container Registry;
 7. deploy one Container App replica;
 8. verify the configured customer and mode counts;
@@ -310,7 +311,50 @@ gh run watch
 
 OAuth callback URLs must match exactly, including HTTPS, hostname, path, and absence of a trailing slash after `/auth/callback`.
 
-## 7. Become the administrator and onboard users
+## 7. Configure live Fabric access
+
+The base application deploys without Fabric or Entra configuration. Until this section is complete, the live mode shows **LIVE AGENT SETUP REQUIRED** while all public-intelligence and synthetic modes remain available.
+
+1. Publish four Microsoft Fabric Data Agents that cover the four specialist domains defined in `manufacturing-live.mjs`. Every person using the live mode needs direct read access to each Data Agent and its underlying data sources.
+2. In the Foundry project, open **Manage → Connected resources**, add one **Microsoft Fabric** connection for each published Data Agent, and use these exact names:
+
+   | Connection name | Specialist |
+   |---|---|
+   | `fabric-factory-pulse` | Current operating state, alerts, OEE, and work orders |
+   | `fabric-reliability-maintenance` | Condition, downtime, criticality, and maintenance |
+   | `fabric-quality-spectrometer` | Quality, inspection, scrap, and spectrometer readings |
+   | `fabric-customer-delivery-impact` | Affected orders, customer priority, and delivery impact |
+
+3. Assign every live user, or an Entra group containing those users, the least-privilege **Foundry Agent Consumer** role on the Foundry project. Azure Owner/Contributor alone does not grant agent endpoint data actions. For one user object ID:
+
+   ```powershell
+   $projectId = "/subscriptions/<subscription-id>/resourceGroups/rg-clientsphere-<suffix>/providers/Microsoft.CognitiveServices/accounts/clientsphere-ai-<suffix>/projects/clientsphere-project"
+   az role assignment create `
+     --assignee-object-id "<entra-user-object-id>" `
+     --assignee-principal-type User `
+     --role "Foundry Agent Consumer" `
+     --scope $projectId
+   ```
+
+4. Register a single-tenant Microsoft Entra web application. Add the exact redirect URI `$appUrl/auth/fabric/callback`, add the delegated **Azure AI Foundry → user_impersonation** permission, and grant consent if required by tenant policy.
+5. Create a client secret, then run:
+
+   ```powershell
+   .\scripts\configure-live-fabric.ps1
+   ```
+
+   The helper verifies the four Foundry connections, shows the exact redirect URI, securely prompts for the application ID and secret, stores them in GitHub, and dispatches a full agent refresh. It never places the secret in command history or a process argument.
+6. Wait for the workflow to succeed and verify:
+
+   ```powershell
+   Invoke-RestMethod "$appUrl/healthz"
+   ```
+
+   A completed live deployment reports `liveFabricAgentsConfigured: 4`, `liveOrchestratorConfigured: true`, and `fabricAuthConfigured: true`.
+
+The browser then shows **CONNECT TO FABRIC**. After the user signs in, it changes to **LIVE · Microsoft Entra** with their identity and token expiry. Live questions go only to the shared orchestrator; it delegates through A2A to one or more specialists under that user's Fabric permissions.
+
+## 8. Become the administrator and onboard users
 
 Open the app and sign in with the GitHub login stored in `ADMIN_LOGINS`. That login becomes the first approved administrator. If a different user reaches the app first, they remain pending and cannot claim administration.
 
@@ -354,7 +398,7 @@ The sole approved administrator cannot be deleted or demoted.
 
 `ADMIN_LOGINS` is a bootstrap/recovery allowlist, not a permanent override of stored admin decisions. Existing stored administrators remain administrators until changed in `/admin`.
 
-## 8. Optional approval email
+## 9. Optional approval email
 
 Email is not required. Without it, all access decisions work in `/admin`.
 
@@ -441,6 +485,7 @@ Edit `.env`:
 ```ini
 PORT=3000
 PROJECT_ENDPOINT=https://clientsphere-ai-<suffix>.services.ai.azure.com/api/projects/clientsphere-project
+FOUNDRY_PROJECT_RESOURCE_ID=/subscriptions/<subscription-id>/resourceGroups/rg-clientsphere-<suffix>/providers/Microsoft.CognitiveServices/accounts/clientsphere-ai-<suffix>/projects/clientsphere-project
 MODEL_DEPLOYMENT=gpt-5.6-sol
 GENERAL_MODEL_DEPLOYMENT=gpt-5.6-sol
 USE_CASE_MODEL_SOL=gpt-5.6-sol
@@ -454,6 +499,9 @@ GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 SESSION_SECRET=<the-generated-local-secret>
 ADMIN_LOGINS=<your-github-login>
+ENTRA_TENANT_ID=<azure-tenant-id>
+ENTRA_CLIENT_ID=<entra-application-client-id>
+ENTRA_CLIENT_SECRET=<entra-application-client-secret>
 ```
 
 Keep `.env` uncommitted. A local session secret can differ from production.
@@ -537,6 +585,7 @@ Do not put passwords, keys, tenant secrets, or customer-confidential content int
 | Secret | Rotation guidance |
 |---|---|
 | `GH_OAUTH_CLIENT_SECRET` | Generate a new GitHub OAuth secret, rerun `configure-github-oauth.ps1`, verify login, then revoke the old secret |
+| `ENTRA_CLIENT_SECRET` | Generate a replacement secret, rerun `configure-live-fabric.ps1`, verify a live query, then revoke the old secret |
 | `ACS_CONNECTION_STRING` | Set the new GitHub secret and rerun deployment |
 | `SESSION_SECRET` | **Do not rotate without an access-registry migration/reset plan** |
 
@@ -588,6 +637,10 @@ The application does not silently fall back to another model. A missing model or
 | Model deployment fails with quota/capacity/availability | Use a supported AI region, request quota, or deliberately change model capacity/version in Bicep |
 | Workflow says `ADMIN_LOGINS` or another variable is empty | Rerun bootstrap and inspect `gh variable list` |
 | Production says GitHub sign-in is not configured | Create the OAuth App, verify the exact callback URL, and rerun `configure-github-oauth.ps1` |
+| Live mode says setup is required | Create all four named Microsoft Fabric connections in Foundry, then rerun `configure-live-fabric.ps1` |
+| Live mode asks the user to connect | Complete Microsoft Entra sign-in; the user must have access to all queried Fabric Data Agents and sources |
+| Live query returns 403 from Foundry | Assign the connected user or their group **Foundry Agent Consumer** on the Foundry project |
+| Live query returns no authorized data | Grant the connected Entra user direct read access in Fabric; do not replace the governed result with application credentials |
 | Owner login remains pending | Confirm `ADMIN_LOGINS` contains the exact GitHub login, dispatch deployment, then sign out and in again |
 | `customer-agents.json` is missing locally | Run `npm run setup` with `PROJECT_ENDPOINT` configured and Foundry roles assigned |
 | Foundry returns 401/403 locally | Run `az login` in the correct tenant/subscription and check the four data-plane roles |
@@ -595,7 +648,7 @@ The application does not silently fall back to another model. A missing model or
 | Research refuses to publish | More than half of customers returned zero usable pages; fix the source URLs rather than publishing a mostly empty knowledge base |
 | Access changes return 503 | A deployment has temporarily locked access mutations; retry after the workflow finishes |
 | Email configuration step fails | Set all four email values or remove all four to keep email disabled |
-| Smoke test count fails | Run `npm run customers:validate`; each customer must currently resolve to exactly four modes |
+| Smoke test count fails | Run `npm run customers:validate`; each customer must currently resolve to exactly five visible modes |
 
 ## Verification checklist
 
@@ -603,13 +656,14 @@ After setup:
 
 1. `GET /healthz` returns `status: "ok"`.
 2. `customers` and `agentsConfigured` equal the number of entries in `config/customers.json`.
-3. `agentModesConfigured` equals four times the customer count.
+3. `agentModesConfigured` equals five times the customer count.
 4. GitHub OAuth redirects back to `/auth/callback`.
 5. The configured owner is approved and marked admin.
 6. A second GitHub user becomes pending, not admin.
 7. The admin can approve the second user.
 8. Each customer can answer from its own public sources and does not reuse another customer's conversation.
-9. The latest deployment and scheduled refresh workflows are enabled.
+9. A live deployment reports four Fabric specialists, one orchestrator, and configured delegated Entra identity.
+10. The latest deployment and scheduled refresh workflows are enabled.
 
 ## Removing the deployment
 

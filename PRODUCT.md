@@ -20,7 +20,7 @@ ClientSphere turns a portfolio of public customer information into a focused con
 |---|---|
 | Prepare | Select a customer and build an evidence-led public brief |
 | Explore | Ask questions with citations and clear uncertainty |
-| Demonstrate | Run three tailored synthetic workflows with explicit sample data |
+| Demonstrate | Run three tailored synthetic workflows or query the shared live Fabric shopfloor experience |
 | Rehearse | Practise a customer conversation and receive coaching |
 | Present | Use brief voice/avatar turns or structured screen-first artefacts |
 | Govern | Approve users, delegate administration, and inspect usage |
@@ -44,7 +44,7 @@ Credible, composed, and incisive. The product should feel like a prepared accoun
 3. Preserve conversational focus: answer first, expand on demand.
 4. Let customer context shape the experience without weakening a consistent product shell.
 5. Treat customer isolation, source provenance, and safe retrieval as product features.
-6. Make the general adviser and three synthetic use-case agents unmistakably different but effortless to switch.
+6. Make the general adviser, three synthetic use cases, and live Fabric mode unmistakably different but effortless to switch.
 
 ## Accessibility & Inclusion
 
@@ -57,7 +57,7 @@ A fork is not complete until it has:
 1. replaced the entire customer catalogue;
 2. removed previous-owner contact/resource values;
 3. kept public and synthetic data clearly separated;
-4. preserved one general plus three use-case modes per customer;
+4. preserved one general, three synthetic use cases, and the shared live Fabric mode per customer;
 5. configured its own Azure/GitHub identity and administrator;
 6. rewritten all documentation for its actual audience and customer sectors;
 7. passed the dynamic customer/agent smoke test.

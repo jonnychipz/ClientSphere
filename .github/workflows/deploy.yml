@@ -153,6 +153,7 @@ jobs:
         shell: bash
         run: |
           echo "PROJECT_ENDPOINT=$(jq -r '.properties.outputs.projectEndpoint.value' deployment.json)" >> "$GITHUB_ENV"
+          echo "FOUNDRY_PROJECT_RESOURCE_ID=$(jq -r '.properties.outputs.foundryProjectResourceId.value' deployment.json)" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_NAME=$(jq -r '.properties.outputs.containerAppName.value' deployment.json)" >> "$GITHUB_ENV"
           echo "REGISTRY_NAME=$(jq -r '.properties.outputs.containerRegistryName.value' deployment.json)" >> "$GITHUB_ENV"
           echo "REGISTRY_SERVER=$(jq -r '.properties.outputs.containerRegistryServer.value' deployment.json)" >> "$GITHUB_ENV"
@@ -175,7 +176,7 @@ jobs:
           base="${{ github.event.before }}"
           if [[ "${{ github.event_name }}" == "push" && -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
             git fetch --no-tags --depth=1 origin "$base"
-            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs use-case-registry.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
+            if ! git diff --quiet "$base" "${{ github.sha }}" -- config/customers.json instructions.mjs use-case-registry.mjs manufacturing-live.mjs webgrounding.mjs scripts/provision-customer-agents.mjs scripts/refresh-customer-content.mjs; then
               changed=true
             fi
           elif [[ "${{ github.event_name }}" == "push" ]]; then
@@ -269,6 +270,33 @@ jobs:
               AUTH_DEV_MODE=false \
             --output none
 
+      - name: Configure delegated Microsoft Entra access for live Fabric data
+        env:
+          ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+        run: |
+          if [[ -z "$ENTRA_CLIENT_ID" && -z "$ENTRA_CLIENT_SECRET" ]]; then
+            echo "Live Fabric identity is not configured; the base application will remain available."
+            exit 0
+          fi
+          if [[ -z "$ENTRA_CLIENT_ID" || -z "$ENTRA_CLIENT_SECRET" ]]; then
+            echo "Live Fabric identity is incomplete. Set both ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET." >&2
+            exit 1
+          fi
+          az containerapp secret set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --secrets entra-client-secret="$ENTRA_CLIENT_SECRET" \
+            --output none
+          az containerapp update \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars \
+              ENTRA_TENANT_ID="${{ vars.AZURE_TENANT_ID }}" \
+              ENTRA_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_CLIENT_SECRET=secretref:entra-client-secret \
+            --output none
+
       - name: Configure optional approval email
         env:
           ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
@@ -329,15 +357,27 @@ jobs:
 
       - name: Smoke test
         shell: bash
+        env:
+          ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
         run: |
           url="${{ steps.outputs.outputs.app_url }}/healthz"
           expected_customers=$(jq 'length' config/customers.json)
-          expected_modes=$((expected_customers * 4))
+          expected_modes=$((expected_customers * 5))
+          expected_live_agents=$(jq '(.liveManufacturing.agents // {}) | length' customer-agents.json)
+          expected_live_orchestrator=$(jq '(.liveManufacturing.orchestrator.agentName // "") != ""' customer-agents.json)
+          expected_fabric_auth=false
+          if [[ -n "$ENTRA_CLIENT_ID" && -n "$ENTRA_CLIENT_SECRET" ]]; then
+            expected_fabric_auth=true
+          fi
           for attempt in {1..30}; do
             if curl --fail --silent --show-error "$url" | jq -e \
               --argjson customers "$expected_customers" \
               --argjson modes "$expected_modes" \
-              '.status == "ok" and .customers == $customers and .agentsConfigured == $customers and .agentModesConfigured == $modes' >/dev/null; then
+              --argjson live_agents "$expected_live_agents" \
+              --argjson live_orchestrator "$expected_live_orchestrator" \
+              --argjson fabric_auth "$expected_fabric_auth" \
+              '.status == "ok" and .customers == $customers and .agentsConfigured == $customers and .agentModesConfigured == $modes and .liveFabricAgentsConfigured == $live_agents and .liveOrchestratorConfigured == $live_orchestrator and .fabricAuthConfigured == $fabric_auth' >/dev/null; then
               exit 0
             fi
             sleep 15

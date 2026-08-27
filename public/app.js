@@ -111,6 +111,8 @@ const state = {
   customerLoadId: 0,
   resources: [],
   agentMode: "general",
+  liveSpecialist: "factory-pulse",
+  fabricAuth: { available: false, configured: false, connected: false, loading: true },
   responseMode: "brief",
   attachment: null,
   attachmentGeneration: 0,
@@ -285,6 +287,7 @@ async function runChat(prompt, opts = {}) {
         threadId: state.threadId,
         customerId: state.customer?.id,
         agentMode: state.agentMode,
+        liveSpecialist: state.liveSpecialist,
         responseMode: state.responseMode,
         attachments: opts.attachment ? [opts.attachment] : [],
       }),
@@ -297,6 +300,7 @@ async function runChat(prompt, opts = {}) {
     if (typing) typing.remove();
     if (!res.ok) {
       if (opts.onReply) opts.onReply({ error: data.error || "Something went wrong." });
+      else if (data.code === "FABRIC_AUTH_REQUIRED") renderFabricAuthRequired(data);
       else addMessage("bot", "⚠️ " + (data.error || "Something went wrong.") + (data.detail ? "\n" + data.detail : ""));
       return;
     }
@@ -330,6 +334,12 @@ function kickoffGreeting() {
   if (state.greeted) return;
   state.greeted = true;
   const mode = currentModeDefinition();
+  if (mode.isLive) {
+    const greeting = `The ${mode.name} is ready. Choose Operations, Reliability, Quality, or Delivery, then ask a live Fabric data question.`;
+    addMessage("bot", greeting);
+    if (state.voiceOn && (state.avatarLive || state.voiceFallback)) speak(greeting);
+    return;
+  }
   const fullName = state.me?.name && state.me.name.toLowerCase() !== state.me.login?.toLowerCase()
     ? state.me.name
     : "the user";
@@ -970,10 +980,10 @@ function setCustomerRequired(required) {
   els.avatarIdleCopy.textContent = "Choose a customer to load its advisers.";
   els.input.placeholder = "Choose a customer before starting a conversation";
   els.agentModeGrid.innerHTML = "";
-  els.agentModeDetail.innerHTML = "<div class=\"agent-detail-copy\"><p>Select a customer to load its general adviser and three tailored synthetic demo agents.</p></div>";
+  els.agentModeDetail.innerHTML = "<div class=\"agent-detail-copy\"><p>Select a customer to load its general adviser, three tailored synthetic demos, and the shared live Fabric experience.</p></div>";
   els.agentModeBadge.textContent = "Waiting";
   els.messages.innerHTML =
-    '<div class="msg bot welcome"><div class="bubble"><p><b>Choose a customer to begin.</b> ClientSphere will then load that customer’s public intelligence, concise adviser, and three synthetic demo agents.</p><div class="chips"><button class="chip" id="chooseCustomerPrompt" type="button">Choose customer</button></div></div></div>';
+    '<div class="msg bot welcome"><div class="bubble"><p><b>Choose a customer to begin.</b> ClientSphere will load public intelligence, three synthetic demos, and a shared live Fabric shopfloor experience.</p><div class="chips"><button class="chip" id="chooseCustomerPrompt" type="button">Choose customer</button></div></div></div>';
   document.getElementById("chooseCustomerPrompt")?.addEventListener("click", showCustomerSelector);
   renderResources();
 }
@@ -1012,6 +1022,80 @@ function currentModeDefinition() {
   return agentModes().find((mode) => mode.id === state.agentMode) || generalModeDefinition();
 }
 
+async function refreshFabricStatus({ rerender = true } = {}) {
+  state.fabricAuth = { ...state.fabricAuth, loading: true };
+  if (rerender && currentModeDefinition().isLive) renderAgentModes();
+  try {
+    const response = await fetch("/api/fabric/status", { cache: "no-store" });
+    const payload = await response.json();
+    state.fabricAuth = response.ok
+      ? { ...payload, loading: false }
+      : { available: false, configured: false, connected: false, loading: false, error: payload.error };
+  } catch (error) {
+    state.fabricAuth = { available: true, configured: true, connected: false, loading: false, error: error.message };
+  }
+  if (rerender && currentModeDefinition().isLive) renderAgentModes();
+  return state.fabricAuth;
+}
+
+function renderFabricAuthRequired(data) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const text = document.createElement("p");
+  text.textContent = data.error || "Connect Microsoft Entra to query the live Fabric data.";
+  const actions = document.createElement("div");
+  actions.className = "chips";
+  const connect = document.createElement("button");
+  connect.className = "chip live-connect";
+  connect.type = "button";
+  connect.textContent = "Connect Microsoft Entra";
+  connect.addEventListener("click", () => {
+    location.href = data.connectUrl || "/auth/fabric/start?returnTo=%2F";
+  });
+  actions.appendChild(connect);
+  bubble.append(text, actions);
+  wrap.appendChild(bubble);
+  els.messages.appendChild(wrap);
+  els.messages.scrollTop = els.messages.scrollHeight;
+}
+
+function selectLiveSpecialist(specialistId, options = {}) {
+  const mode = currentModeDefinition();
+  if (!mode.isLive || !mode.specialists.some((item) => item.id === specialistId)) return;
+  if (state.liveSpecialist === specialistId && options.force !== true) return;
+  interruptAvatar();
+  stopListening();
+  state.generation += 1;
+  state.busy = false;
+  els.sendBtn.disabled = false;
+  state.liveSpecialist = specialistId;
+  state.threadId = null;
+  state.pending = null;
+  state.greeted = false;
+  try { localStorage.setItem("clientsphere.liveSpecialist", specialistId); } catch {}
+  renderAgentModes();
+  if (options.welcome !== false) renderWelcome();
+  if (options.announce !== false) {
+    const specialist = mode.specialists.find((item) => item.id === specialistId);
+    toast(`${specialist.name} live Fabric specialist selected.`);
+  }
+}
+
+async function disconnectFabric() {
+  const response = await fetch("/api/fabric/disconnect", { method: "POST" });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    toast(payload.error || "Could not disconnect Microsoft Entra.");
+    return;
+  }
+  state.threadId = null;
+  await refreshFabricStatus();
+  renderWelcome();
+  toast("Microsoft Entra disconnected from the live Fabric mode.");
+}
+
 function selectResponseMode(mode) {
   if (!["brief", "structured"].includes(mode)) return;
   state.responseMode = mode;
@@ -1031,26 +1115,76 @@ function renderAgentModes() {
   for (const mode of modes) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "agent-mode-card";
+    button.className = `agent-mode-card${mode.isLive ? " live-mode" : ""}`;
     button.dataset.agentMode = mode.id;
     button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(mode.id === state.agentMode));
-    const shortName = mode.id === "general" ? "General Adviser" : mode.name;
+    const shortName = mode.id === "general" ? "General Adviser" : mode.isLive ? "Shopfloor Live" : mode.name;
     button.innerHTML =
       `<span class="mode-top"><span class="mode-icon">${icon(mode.icon || "compass", 14)}</span>` +
       `<strong>${escapeHtml(shortName)}</strong></span>` +
-      `<small>${escapeHtml(mode.modelLabel || "GPT-5.6")}</small>`;
+      `<small>${mode.isLive ? '<span class="live-dot"></span>' : ""}${escapeHtml(mode.modelLabel || "GPT-5.6")}</small>`;
     button.addEventListener("click", () => selectAgentMode(mode.id));
     els.agentModeGrid.appendChild(button);
   }
 
-  els.agentModeBadge.textContent = active.id === "general" ? "General" : "Synthetic demo";
-  const meta = [
-    active.modelLabel || "GPT-5.6",
-    active.supportsImages ? "Multimodal" : "Text + web",
-    "Public web grounded",
-    ...(active.id === "general" ? [] : ["Code Interpreter"]),
-  ];
+  const isLive = Boolean(active.isLive);
+  els.agentModeBadge.textContent = active.id === "general" ? "General" : isLive ? "Live Fabric data" : "Synthetic demo";
+  els.agentModeBadge.classList.toggle("live-data", isLive);
+  const meta = isLive
+    ? ["4 Fabric Data Agents", "Live KQL + Lakehouse SQL", "Entra-authorized"]
+    : [
+      active.modelLabel || "GPT-5.6",
+      active.supportsImages ? "Multimodal" : "Text + web",
+      "Public web grounded",
+      ...(active.id === "general" ? [] : ["Code Interpreter"]),
+    ];
+  if (isLive) {
+    const selected = active.specialists.find((item) => item.id === state.liveSpecialist) || active.specialists[0];
+    state.liveSpecialist = selected.id;
+    const specialistButtons = active.specialists.map((specialist) =>
+      `<button type="button" class="live-specialist${specialist.id === selected.id ? " active" : ""}" ` +
+      `data-live-specialist="${escapeHtml(specialist.id)}" aria-pressed="${specialist.id === selected.id}">` +
+      `<span>${icon(specialist.icon, 14)}</span><span><b>${escapeHtml(specialist.name)}</b><small>${escapeHtml(specialist.summary)}</small></span></button>`
+    ).join("");
+    const promptButtons = active.specialists.map((specialist) =>
+      `<button type="button" data-demo-prompt="${escapeHtml(specialist.prompt)}" ` +
+      `data-live-prompt-specialist="${escapeHtml(specialist.id)}">${escapeHtml(specialist.prompt)}</button>`
+    ).join("");
+    const auth = state.fabricAuth;
+    const authMarkup = auth.loading
+      ? '<span class="fabric-auth-indicator checking" aria-hidden="true"></span><span class="fabric-auth-copy"><b>Checking Microsoft Entra</b><small>Confirming delegated Fabric access...</small></span>'
+      : !auth.available
+        ? '<span class="fabric-auth-indicator warning" aria-hidden="true"></span><span class="fabric-auth-copy warning"><b>LIVE AGENT SETUP REQUIRED</b><small>The shared Foundry orchestrator has not been provisioned.</small></span>'
+        : auth.connected
+        ? `<span class="fabric-auth-indicator connected" aria-hidden="true"></span><span class="fabric-auth-copy connected"><b>LIVE · Microsoft Entra</b><small>${escapeHtml(auth.name || auth.username || "Microsoft Entra user")} · expires ${escapeHtml(new Date(auth.expiresOn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small></span>` +
+          '<button type="button" class="fabric-auth-action" data-fabric-disconnect>Disconnect</button>'
+        : auth.configured
+          ? '<span class="fabric-auth-indicator required" aria-hidden="true"></span><span class="fabric-auth-copy"><b>CONNECT TO FABRIC</b><small>Microsoft Entra is required for live governed data.</small></span>' +
+            `<button type="button" class="fabric-auth-action primary" data-fabric-connect>Connect Entra</button>`
+          : '<span class="fabric-auth-indicator warning" aria-hidden="true"></span><span class="fabric-auth-copy warning"><b>LIVE DATA UNAVAILABLE</b><small>Microsoft Entra has not been configured.</small></span>';
+    els.agentModeDetail.innerHTML =
+      `<div class="agent-detail-copy live-detail"><p><b>${escapeHtml(active.name)}</b> - ${escapeHtml(active.summary)}</p>` +
+      `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
+      `<p class="live-disclosure">${escapeHtml(active.disclosure)}</p><div class="live-specialists">${specialistButtons}</div>` +
+      `<div class="agent-demo-prompts live-prompts">${promptButtons}</div></div>` +
+      `<aside class="live-source-panel"><strong>${escapeHtml(selected.name)}</strong><p>${escapeHtml(selected.summary)}</p>` +
+      `<div class="fabric-auth-label">${icon("shield", 13)} Identity &amp; data access</div><div class="fabric-auth-row">${authMarkup}</div>` +
+      `<small>Source: Microsoft Fabric · Manufacturing-RTI-Demo<br>Queries run with the connected user’s Fabric permissions.</small></aside>`;
+    els.agentModeDetail.querySelectorAll("[data-live-specialist]").forEach((button) => {
+      button.addEventListener("click", () => selectLiveSpecialist(button.dataset.liveSpecialist));
+    });
+    els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
+      button.addEventListener("click", () => {
+        selectLiveSpecialist(button.dataset.livePromptSpecialist, { announce: false, welcome: false });
+        sendMessage(button.dataset.demoPrompt);
+      });
+    });
+    els.agentModeDetail.querySelector("[data-fabric-connect]")?.addEventListener("click", () => {
+      location.href = state.fabricAuth.connectUrl || "/auth/fabric/start?returnTo=%2F";
+    });
+    els.agentModeDetail.querySelector("[data-fabric-disconnect]")?.addEventListener("click", disconnectFabric);
+  } else {
   const scenes = active.demoScenes || (active.prompts || []).map((prompt, index) => ({
     label: `${index + 1}. Starter`,
     title: prompt,
@@ -1073,18 +1207,21 @@ function renderAgentModes() {
   els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
     button.addEventListener("click", () => sendMessage(button.dataset.demoPrompt));
   });
+  }
 
-  const canAttach = active.id === "general" || active.supportsImages;
+  const canAttach = !isLive && (active.id === "general" || active.supportsImages);
   els.attachBtn.disabled = !canAttach;
   els.attachBtn.title = canAttach
     ? "Attach an image for multimodal analysis"
     : "This agent is designed for text and web-grounded scenarios";
   if (!canAttach) clearAttachment();
-  els.briefBtn.innerHTML = icon("brief") + `<span>${active.id === "general" ? "Brief" : "Run demo"}</span>`;
+  els.briefBtn.innerHTML = icon("brief") + `<span>${active.id === "general" ? "Brief" : isLive ? "Ask live data" : "Run demo"}</span>`;
   els.input.placeholder = active.id === "general"
     ? `Ask about ${state.customer.name}...`
-    : `Talk to ${active.name}...`;
+    : isLive ? `Ask ${active.specialists.find((item) => item.id === state.liveSpecialist)?.name || "the live plant"}...` : `Talk to ${active.name}...`;
   els.avatarIdleCopy.textContent = `Turn on voice to talk with the ${active.name}.`;
+  els.roleplayBtn.disabled = isLive;
+  els.roleplayBtn.title = isLive ? "Roleplay is unavailable for live operational data" : "Practice your pitch";
 }
 
 function selectAgentMode(modeId, options = {}) {
@@ -1107,8 +1244,9 @@ function selectAgentMode(modeId, options = {}) {
   renderWelcome();
   try { localStorage.setItem(`clientsphere.agentMode.${state.customer.id}`, mode.id); } catch {}
   if (options.announce !== false) {
-    toast(`${mode.name} loaded. A fresh ${mode.id === "general" ? "conversation" : "synthetic demo"} is ready.`);
+    toast(`${mode.name} loaded. A fresh ${mode.id === "general" ? "conversation" : mode.isLive ? "live data session" : "synthetic demo"} is ready.`);
   }
+  if (mode.isLive) refreshFabricStatus();
 }
 
 function renderWelcome() {
@@ -1124,20 +1262,25 @@ function renderWelcome() {
   const intro = document.createElement("p");
   intro.innerHTML = mode.id === "general"
     ? `ClientSphere is focused on <b>${escapeHtml(customer.name)}</b>. Ask a quick question and the adviser will expand only when you request it.`
-    : `<b>${escapeHtml(mode.name)}</b> is ready as a synthetic ${escapeHtml(customer.name)} demo. Choose a starter or attach an image where supported.`;
+    : mode.isLive
+      ? `<b>${escapeHtml(mode.name)}</b> queries the current Celyn Components demo plant through Microsoft Fabric. This is live demo telemetry, not ${escapeHtml(customer.name)} operational data.`
+      : `<b>${escapeHtml(mode.name)}</b> is ready as a synthetic ${escapeHtml(customer.name)} demo. Choose a starter or attach an image where supported.`;
   const chips = document.createElement("div");
   chips.className = "chips";
   const starters = mode.id === "general"
     ? customer.topics.slice(0, 4).map((topic) => `Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`)
-    : (mode.demoScenes || []).map((scene) => scene.prompt);
+    : mode.isLive ? mode.specialists.map((specialist) => specialist.prompt) : (mode.demoScenes || []).map((scene) => scene.prompt);
   starters.slice(0, 4).forEach((prompt, index) => {
     const button = document.createElement("button");
     button.className = "chip";
     button.type = "button";
     button.textContent = mode.id === "general"
       ? prompt
-      : `${mode.demoScenes[index].label} · ${mode.demoScenes[index].title}`;
-    button.addEventListener("click", () => sendMessage(prompt));
+      : mode.isLive ? `${mode.specialists[index].name} · ${prompt}` : `${mode.demoScenes[index].label} · ${mode.demoScenes[index].title}`;
+    button.addEventListener("click", () => {
+      if (mode.isLive) selectLiveSpecialist(mode.specialists[index].id, { announce: false, welcome: false });
+      sendMessage(prompt);
+    });
     chips.appendChild(button);
   });
   bubble.append(intro, chips);
@@ -1244,6 +1387,7 @@ async function selectCustomer(customerId, options = {}) {
     clearAttachment();
     renderAgentModes();
     renderWelcome();
+    if (currentModeDefinition().isLive) await refreshFabricStatus();
     renderResources();
     renderCustomerOptions(els.customerSearch.value);
     try { localStorage.setItem("clientsphere.customer", state.customer.id); } catch {}
@@ -1298,6 +1442,7 @@ function renderResources() {
         item.addEventListener("click", () => {
           openDrawer(false);
           if (l.agentMode) selectAgentMode(l.agentMode);
+          if (l.liveSpecialist) selectLiveSpecialist(l.liveSpecialist, { announce: false, welcome: false });
           dispatch(l.prompt, { userText: l.title });
         });
       }
@@ -1468,6 +1613,7 @@ async function init() {
   state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
   try { state.responseMode = localStorage.getItem("clientsphere.responseMode") || "brief"; } catch {}
+  try { state.liveSpecialist = localStorage.getItem("clientsphere.liveSpecialist") || "factory-pulse"; } catch {}
   selectResponseMode(state.responseMode);
   renderCustomerOptions();
   let savedCustomer = null;
@@ -1533,6 +1679,9 @@ async function init() {
     const mode = currentModeDefinition();
     if (mode.id === "general") {
       dispatch("[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.", { userText: "Build customer brief", speak: false });
+    } else if (mode.isLive) {
+      const specialist = mode.specialists.find((item) => item.id === state.liveSpecialist) || mode.specialists[0];
+      sendMessage(specialist.prompt);
     } else {
       sendMessage(`Run a complete synthetic demonstration of the ${mode.name} workflow for ${state.customer.name}. Make the synthetic inputs, six workflow steps, human controls, business value, measures, and next proof point visible.`);
     }

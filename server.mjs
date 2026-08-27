@@ -12,7 +12,10 @@ import { FETCH_DOC_TOOL, fetchOfficialDoc } from "./webgrounding.mjs";
 import {
   customers, getCustomer, customerPublicView, loadAgentMetadata,
 } from "./customer-registry.mjs";
-import { buildCustomerUseCases, getCustomerUseCase } from "./use-case-registry.mjs";
+import { buildCustomerSyntheticUseCases, buildCustomerUseCases, getCustomerUseCase } from "./use-case-registry.mjs";
+import {
+  MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_SPECIALISTS, getManufacturingSpecialist,
+} from "./manufacturing-live.mjs";
 import { resolveCustomerLogo } from "./customer-logo.mjs";
 import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
 import { buildAgentInput } from "./multimodal-input.mjs";
@@ -20,6 +23,12 @@ import {
   DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
 } from "./auth.mjs";
+import {
+  FABRIC_AUTH_CONFIGURED, DelegatedAccessTokenCredential,
+  clearFabricSession, clearFabricStateCookie, createFabricState,
+  exchangeFabricCode, fabricAuthorizeUrl, fabricStateFromRequest,
+  getFabricSession, setFabricSession, setFabricStateCookie, verifyFabricState,
+} from "./fabric-auth.mjs";
 import {
   initStore, STORAGE_MODE, getUser, registerUser, setStatus, setAdmin, deleteUser,
   listUsers, replaceUsers, logUsage, getUsage, usageStats, log, getLogs, createToken, consumeToken, peekToken,
@@ -54,12 +63,18 @@ try {
 }
 for (const customer of customers) {
   const metadata = agentMetadata.customers[customer.id];
-  const useCasesReady = buildCustomerUseCases(customer)
+  const useCasesReady = buildCustomerSyntheticUseCases(customer)
     .every((useCase) => metadata?.useCases?.[useCase.id]?.agentName);
   if (!metadata?.agentName || !useCasesReady) {
     console.error(`Customer agent metadata is missing '${customer.id}'.`);
     process.exit(1);
   }
+}
+const liveManufacturingReady = MANUFACTURING_SPECIALISTS.every(
+  (specialist) => agentMetadata.liveManufacturing?.agents?.[specialist.id]?.agentName,
+) && agentMetadata.liveManufacturing?.orchestrator?.agentName;
+if (!liveManufacturingReady) {
+  console.warn("Shared live manufacturing agent metadata is unavailable; live Fabric mode will remain disabled.");
 }
 
 const credential = new DefaultAzureCredential();
@@ -119,12 +134,23 @@ function resourcesFor(customer) {
     },
     {
       group: "Synthetic use-case agents",
-      links: buildCustomerUseCases(customer).map((useCase) => ({
+      links: buildCustomerSyntheticUseCases(customer).map((useCase) => ({
         icon: useCase.icon,
         title: useCase.name,
         sub: useCase.businessValue,
         prompt: useCase.prompts[0],
         agentMode: useCase.id,
+      })),
+    },
+    {
+      group: "Live Fabric data",
+      links: MANUFACTURING_SPECIALISTS.map((specialist) => ({
+        icon: specialist.icon,
+        title: specialist.name,
+        sub: "Celyn Components live demo plant",
+        prompt: specialist.prompt,
+        agentMode: MANUFACTURING_LIVE_MODE_ID,
+        liveSpecialist: specialist.id,
       })),
     },
     {
@@ -253,6 +279,9 @@ function baseUrl(req) {
 }
 function redirectUri(req) {
   return `${baseUrl(req)}/auth/callback`;
+}
+function fabricRedirectUri(req) {
+  return `${baseUrl(req)}/auth/fabric/callback`;
 }
 const appUrlOf = (req) => process.env.PUBLIC_BASE_URL || baseUrl(req);
 
@@ -498,6 +527,59 @@ app.get("/api/me", async (req, res) => {
     res.status(error.statusCode || 500).json({ error: error.message || "Could not load profile" });
   }
 });
+
+app.get("/auth/fabric/start", requireApproved(async (req, res) => {
+  if (!FABRIC_AUTH_CONFIGURED) {
+    return res.status(503).send("Microsoft Entra connection is not configured. <a href='/'>Back</a>.");
+  }
+  const state = createFabricState({
+    login: req.authUser.login,
+    returnTo: req.query.returnTo,
+  });
+  setFabricStateCookie(res, state, req.secure);
+  res.redirect(fabricAuthorizeUrl({ state, redirectUri: fabricRedirectUri(req) }));
+}));
+
+app.get("/auth/fabric/callback", async (req, res) => {
+  try {
+    const user = await resolveUser(req);
+    if (!user || user.status !== "approved") return res.redirect("/login");
+    const stateToken = fabricStateFromRequest(req);
+    if (!stateToken || stateToken !== req.query.state) {
+      return res.status(400).send("Invalid Microsoft Entra state. <a href='/'>Try again</a>.");
+    }
+    const state = verifyFabricState(stateToken, user.login);
+    if (!state) return res.status(400).send("Microsoft Entra sign-in expired. <a href='/'>Try again</a>.");
+    const session = await exchangeFabricCode(req.query.code, fabricRedirectUri(req));
+    clearFabricStateCookie(res, req.secure);
+    setFabricSession(res, session, user.login, req.secure);
+    await logUsage(user.login, "fabric-connect", session.username || session.objectId);
+    res.redirect(state.returnTo);
+  } catch (error) {
+    console.error("Fabric OAuth callback error:", error.message);
+    res.status(500).send(`Microsoft Entra connection failed: ${error.message} <a href='/'>Back</a>`);
+  }
+});
+
+app.get("/api/fabric/status", requireApproved(async (req, res) => {
+  const session = getFabricSession(req, req.authUser.login);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    available: Boolean(liveManufacturingReady),
+    configured: FABRIC_AUTH_CONFIGURED,
+    connected: Boolean(session),
+    name: session?.name || null,
+    username: session?.username || null,
+    expiresOn: session ? new Date(session.expiresOnMs).toISOString() : null,
+    connectUrl: "/auth/fabric/start?returnTo=%2F",
+  });
+}));
+
+app.post("/api/fabric/disconnect", requireApproved(async (req, res) => {
+  clearFabricSession(res, req.secure);
+  await logUsage(req.authUser.login, "fabric-disconnect");
+  res.json({ ok: true });
+}));
 
 // Self-service: delete my own account (notifies the admin).
 app.post("/api/me/delete", requireApproved(async (req, res) => {
@@ -819,16 +901,19 @@ app.get("/api/customers/:customerId", requireApproved(async (req, res) => {
 }));
 
 app.get("/healthz", (req, res) => {
-  const agentModesConfigured = customers.reduce((total, customer) => {
-    const metadata = agentMetadata.customers[customer.id];
-    return total + (metadata?.agentName ? 1 : 0) + Object.keys(metadata?.useCases || {}).length;
-  }, 0);
+  const agentModesConfigured = customers.reduce(
+    (total, customer) => total + 1 + buildCustomerUseCases(customer).length,
+    0,
+  );
   res.json({
     status: "ok",
     app: "ClientSphere",
     customers: customers.length,
     agentsConfigured: Object.keys(agentMetadata.customers).length,
     agentModesConfigured,
+    liveFabricAgentsConfigured: Object.keys(agentMetadata.liveManufacturing?.agents || {}).length,
+    liveOrchestratorConfigured: Boolean(agentMetadata.liveManufacturing?.orchestrator?.agentName),
+    fabricAuthConfigured: FABRIC_AUTH_CONFIGURED,
   });
 });
 
@@ -906,11 +991,13 @@ function renderResponse(response, fileMap) {
   return { text: text.trim(), citations };
 }
 
-async function runAgent(previousResponseId, agentName, customer, input) {
+async function runAgent(previousResponseId, agentName, customer, input, options = {}) {
+  const responseClient = options.openAIClient || openAI;
   const agentReference = { name: agentName, type: "agent_reference" };
   const request = { input };
+  if (options.toolChoice) request.tool_choice = options.toolChoice;
   if (previousResponseId) request.previous_response_id = previousResponseId;
-  let response = await openAI.responses.create(
+  let response = await responseClient.responses.create(
     request,
     { body: { agent_reference: agentReference } },
   );
@@ -929,7 +1016,7 @@ async function runAgent(previousResponseId, agentName, customer, input) {
         output,
       });
     }
-    response = await openAI.responses.create(
+    response = await responseClient.responses.create(
       { input: outputs, previous_response_id: response.id },
       { body: { agent_reference: agentReference } },
     );
@@ -938,7 +1025,10 @@ async function runAgent(previousResponseId, agentName, customer, input) {
 }
 
 app.post("/api/chat", requireApproved(async (req, res) => {
-  const { message, threadId, customerId, agentMode = "general", responseMode = "brief", attachments } = req.body || {};
+  const {
+    message, threadId, customerId, agentMode = "general", responseMode = "brief",
+    attachments, liveSpecialist = "factory-pulse",
+  } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   if (!["brief", "structured"].includes(responseMode)) return res.status(400).json({ error: "valid responseMode required" });
   const customer = getCustomer(customerId);
@@ -946,25 +1036,65 @@ app.post("/api/chat", requireApproved(async (req, res) => {
   const customerMetadata = agentMetadata.customers[customer.id];
   const useCase = agentMode === "general" ? null : getCustomerUseCase(customer, agentMode);
   if (agentMode !== "general" && !useCase) return res.status(400).json({ error: "valid agentMode required" });
-  const customerAgent = agentMode === "general"
-    ? (customerMetadata.general || customerMetadata)
-    : customerMetadata.useCases?.[agentMode];
+  const isLiveFabric = agentMode === MANUFACTURING_LIVE_MODE_ID;
+  const specialist = isLiveFabric ? getManufacturingSpecialist(liveSpecialist) : null;
+  if (isLiveFabric && !specialist) return res.status(400).json({ error: "valid liveSpecialist required" });
+  if (isLiveFabric && attachments?.length) {
+    return res.status(400).json({ error: "The live Fabric mode accepts text questions only." });
+  }
+  const customerAgent = isLiveFabric && liveManufacturingReady
+    ? agentMetadata.liveManufacturing?.orchestrator
+    : agentMode === "general"
+      ? (customerMetadata.general || customerMetadata)
+      : customerMetadata.useCases?.[agentMode];
   if (!customerAgent?.agentName) return res.status(503).json({ error: "Selected agent is not provisioned yet." });
   try {
-    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]\n${message.trim()}`;
+    const fabricSession = isLiveFabric ? getFabricSession(req, req.authUser.login) : null;
+    if (isLiveFabric && !fabricSession) {
+      return res.status(401).json({
+        error: "Connect Microsoft Entra to query the live Fabric data.",
+        code: "FABRIC_AUTH_REQUIRED",
+        connectUrl: "/auth/fabric/start?returnTo=%2F",
+      });
+    }
+    const customerContext = isLiveFabric
+      ? `\n[[CLIENTSPHERE_CONTEXT: The active customer is ${customer.name}. The Fabric data belongs to the Celyn Components demo plant, not ${customer.name}.]]`
+      : "";
+    const specialistContext = isLiveFabric
+      ? `\n[[CLIENTSPHERE_SPECIALIST_LENS: Start with ${specialist.name}. Use any additional specialists required by the question.]]`
+      : "";
+    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]${customerContext}${specialistContext}\n${message.trim()}`;
     const input = buildAgentInput(controlledMessage, attachments);
+    const agentContext = isLiveFabric ? specialist.id : "";
     let previousResponseId = null;
     if (threadId) {
       previousResponseId = verifyThreadToken(
         threadId,
-        { customerId: customer.id, agentMode, userLogin: req.authUser.login },
+        { customerId: customer.id, agentMode, agentContext, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       );
       if (!previousResponseId) {
         return res.status(409).json({ error: "Conversation belongs to a different customer. Start a new conversation." });
       }
     }
-    const response = await runAgent(previousResponseId, customerAgent.agentName, customer, input);
+    let delegatedOpenAI = null;
+    if (isLiveFabric) {
+      const delegatedProject = new AIProjectClient(
+        ENDPOINT,
+        new DelegatedAccessTokenCredential(fabricSession.accessToken, fabricSession.expiresOnMs),
+      );
+      delegatedOpenAI = delegatedProject.getOpenAIClient();
+    }
+    const response = await runAgent(
+      previousResponseId,
+      customerAgent.agentName,
+      customer,
+      input,
+      {
+        openAIClient: delegatedOpenAI,
+        toolChoice: isLiveFabric ? "required" : undefined,
+      },
+    );
     if (response.status !== "completed") {
       return res.status(502).json({
         error: `Response ${response.status}`,
@@ -974,14 +1104,15 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     const { text: reply, citations } = renderResponse(response, customerMetadata.fileMap || {});
     // Capture usage (don't log raw system directives verbatim — just the kind).
     const kind = /^\[\[(\w+)/.exec(message)?.[1] || (message.startsWith("[SYSTEM") ? "greeting" : "chat");
-    logUsage(req.authUser.login, "chat", `${customer.id}:${agentMode}:${kind}`);
+    logUsage(req.authUser.login, "chat", `${customer.id}:${agentMode}:${agentContext || kind}`);
     res.json({
       threadId: createThreadToken(
-        { customerId: customer.id, agentMode, threadId: response.id, userLogin: req.authUser.login },
+        { customerId: customer.id, agentMode, agentContext, threadId: response.id, userLogin: req.authUser.login },
         THREAD_TOKEN_SECRET,
       ),
       customerId: customer.id,
       agentMode,
+      liveSpecialist: specialist?.id || null,
       responseMode,
       reply,
       citations,

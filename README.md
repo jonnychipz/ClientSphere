@@ -2,7 +2,7 @@
 
 > **Start here:** [AI-assisted setup](AI-SETUP-PROMPT.md) · [Manual setup](SELF-HOSTING.md) · [Product tour](docs/SCREENSHOTS.md) · [Deployment](DEPLOYMENT.md) · [Security and storage](STORAGE.md)
 
-ClientSphere turns a list of organisations and their official public websites into an access-controlled customer-intelligence and meeting-coaching application on Azure. Every configured customer receives an isolated knowledge store, a general adviser, and three sector-tailored demonstration agents.
+ClientSphere turns a list of organisations and their official public websites into an access-controlled customer-intelligence and meeting-coaching application on Azure. Every configured customer receives an isolated knowledge store, a general adviser, three sector-tailored demonstration agents, and an optional shared live-manufacturing experience backed by Microsoft Fabric.
 
 ![ClientSphere customer workspace using redacted sample data](docs/images/clientsphere-overview-redacted.png)
 
@@ -31,6 +31,7 @@ The AI-assisted prompt tells the agent to:
 - Ask for concise, evidence-led public intelligence.
 - Open a structured customer brief with sources and dates.
 - Run three synthetic, sector-specific agent workflows per customer.
+- Query a governed live Fabric demo through one orchestrator and four domain specialists.
 - Upload a bounded image to supported multimodal demonstrations.
 - Rehearse customer conversations with roleplay and coaching.
 - Use Azure Speech voices and real-time avatars.
@@ -61,6 +62,9 @@ flowchart LR
     W --> C[Customer catalogue]
     W --> S[Azure Speech]
     W --> A[Customer-specific Foundry agent]
+    W --> O[Live Foundry orchestrator]
+    O --> X[Four A2A specialists]
+    X --> D[Four Fabric Data Agents]
     A --> V[Isolated vector store]
     A --> F[Guarded official-site fetch]
     G[GitHub Actions] --> I[Bicep infrastructure]
@@ -75,7 +79,7 @@ flowchart LR
 | AI | Azure AI Foundry project with GPT-5.6 Sol, Luna, and Terra deployments |
 | Knowledge | Official-site crawler, one isolated vector store per customer |
 | Voice and avatar | Azure Speech with keyless token brokering |
-| Identity | GitHub OAuth plus ClientSphere's approved-user/admin registry |
+| Identity | GitHub OAuth plus ClientSphere's approved-user/admin registry; delegated Microsoft Entra identity for live Fabric |
 | Hosting | Azure Container Apps and Azure Container Registry |
 | Delivery | Bicep and GitHub Actions using immutable repository-bound OIDC |
 | Secrets | GitHub encrypted secrets and Container App secret references |
@@ -121,7 +125,7 @@ npm run check
 npm test
 ```
 
-## Production setup in seven steps
+## Production setup
 
 1. Create your own GitHub fork or repository and clone it.
 2. Replace `config/customers.json`.
@@ -132,14 +136,15 @@ npm test
    .\scripts\bootstrap-github-oidc.ps1 -SubscriptionId "<azure-subscription-id>"
    ```
 
-5. Commit and push to `main`; GitHub Actions provisions Azure, researches the official sites, builds the agents, and deploys the app.
+5. Commit and push to `main`; GitHub Actions provisions Azure, researches the official sites, builds the available agents, and deploys the app.
 6. Create the GitHub OAuth App for the generated URL, then run:
 
    ```powershell
    .\scripts\configure-github-oauth.ps1
    ```
 
-7. Sign in with the GitHub login selected during bootstrap and manage users at `/admin`.
+7. To enable live Fabric, publish four Fabric Data Agents, add the four named Microsoft Fabric connections, grant users **Foundry Agent Consumer**, register the delegated Entra application, then run `.\scripts\configure-live-fabric.ps1`.
+8. Sign in with the GitHub login selected during bootstrap and manage users at `/admin`.
 
 Use [SELF-HOSTING.md](SELF-HOSTING.md) for prerequisites, exact commands, regions/models, role assignments, troubleshooting, and removal.
 
@@ -149,6 +154,7 @@ Use [SELF-HOSTING.md](SELF-HOSTING.md) for prerequisites, exact commands, region
 |---|---|---|
 | `SESSION_SECRET` | GitHub secret | OIDC bootstrap script |
 | GitHub OAuth client ID/secret | GitHub secrets | Secure OAuth helper |
+| Entra live-Fabric client ID/secret | GitHub variable/secret | Secure live-Fabric helper |
 | ACS connection string | GitHub secret, optional | Secure email helper |
 | Azure/GitHub resource identifiers | GitHub variables | OIDC bootstrap script |
 | Optional custom avatar/voice identifiers | GitHub variables | Custom avatar helper |
@@ -162,6 +168,7 @@ Secure configuration helpers:
 
 ```powershell
 .\scripts\configure-github-oauth.ps1
+.\scripts\configure-live-fabric.ps1
 .\scripts\configure-email.ps1
 .\scripts\configure-custom-avatar.ps1 -Disable
 ```
