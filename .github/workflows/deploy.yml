@@ -67,6 +67,19 @@ jobs:
 
       - name: Provision Azure infrastructure
         shell: bash
+        env:
+          CUSTOM_AVATAR_ENABLED: ${{ vars.CUSTOM_AVATAR_ENABLED || 'false' }}
+          CUSTOM_AVATAR_LABEL: ${{ vars.CUSTOM_AVATAR_LABEL || 'Custom presenter' }}
+          CUSTOM_AVATAR_GENDER: ${{ vars.CUSTOM_AVATAR_GENDER || 'male' }}
+          CUSTOM_BODY_CHARACTER: ${{ vars.CUSTOM_BODY_CHARACTER || 'harry' }}
+          CUSTOM_BODY_STYLE: ${{ vars.CUSTOM_BODY_STYLE || 'business' }}
+          CUSTOM_AVATAR_CHARACTER: ${{ vars.CUSTOM_AVATAR_CHARACTER }}
+          CUSTOM_AVATAR_STYLE: ${{ vars.CUSTOM_AVATAR_STYLE }}
+          CUSTOM_AVATAR_PHOTO_MODEL: ${{ vars.CUSTOM_AVATAR_PHOTO_MODEL }}
+          CUSTOM_VOICE_NAME: ${{ vars.CUSTOM_VOICE_NAME }}
+          CUSTOM_VOICE_ENDPOINT_ID: ${{ vars.CUSTOM_VOICE_ENDPOINT_ID }}
+          CUSTOM_VOICE_PROFILE_ID: ${{ vars.CUSTOM_VOICE_PROFILE_ID }}
+          CUSTOM_VOICE_BASE_MODEL: ${{ vars.CUSTOM_VOICE_BASE_MODEL || 'DragonLatestNeural' }}
         run: |
           az config set extension.use_dynamic_install=yes_without_prompt
           for provider in Microsoft.App Microsoft.ContainerRegistry Microsoft.CognitiveServices Microsoft.Insights Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Storage; do
@@ -113,6 +126,18 @@ jobs:
             --parameters \
               deploymentPrincipalObjectId="${{ vars.AZURE_CLIENT_OBJECT_ID }}" \
               adminLogins="${{ vars.ADMIN_LOGINS }}" \
+              customAvatarEnabled="$CUSTOM_AVATAR_ENABLED" \
+              customAvatarLabel="$CUSTOM_AVATAR_LABEL" \
+              customAvatarGender="$CUSTOM_AVATAR_GENDER" \
+              customBodyCharacter="$CUSTOM_BODY_CHARACTER" \
+              customBodyStyle="$CUSTOM_BODY_STYLE" \
+              customAvatarCharacter="$CUSTOM_AVATAR_CHARACTER" \
+              customAvatarStyle="$CUSTOM_AVATAR_STYLE" \
+              customAvatarPhotoModel="$CUSTOM_AVATAR_PHOTO_MODEL" \
+              customVoiceName="$CUSTOM_VOICE_NAME" \
+              customVoiceEndpointId="$CUSTOM_VOICE_ENDPOINT_ID" \
+              customVoiceProfileId="$CUSTOM_VOICE_PROFILE_ID" \
+              customVoiceBaseModel="$CUSTOM_VOICE_BASE_MODEL" \
               sessionSecret="${{ secrets.SESSION_SECRET }}" \
               suffix="${{ vars.CLIENTSPHERE_SUFFIX }}" \
               location="${{ vars.AZURE_LOCATION }}" \

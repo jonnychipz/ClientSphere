@@ -1,6 +1,13 @@
 # State and storage
 
+> **Documentation:** [Home](README.md) · [Manual setup](SELF-HOSTING.md) · [Deployment](DEPLOYMENT.md) · [Authentication](AUTH-SETUP.md)
+
 ClientSphere supports two storage modes.
+
+| Need | Recommended mode |
+|---|---|
+| Small single-replica demo or team deployment | Default encrypted access-state plus local operational data |
+| Durable multi-revision usage/audit history | Azure Table Storage with explicit network and RBAC design |
 
 ## Default production mode
 
@@ -37,3 +44,14 @@ ClientSphereSettings
 ```
 
 Do not use an account key or storage connection string. This mode is for deployments that need durable audit/usage history and have designed the required networking and RBAC.
+
+## Data that must not be committed
+
+```text
+.env
+data/
+knowledge/customers/
+customer-agents.json
+```
+
+Before every commit, inspect `git status --short` and do not force-add these paths.

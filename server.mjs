@@ -164,7 +164,7 @@ async function getSpeechToken() {
   return cachedToken;
 }
 
-// ---- Custom avatars + voice (your likeness), enabled via .env once trained ----
+// ---- Optional custom avatars and voices, enabled only after approval/training ----
 // Shared custom VOICE (personal voice or CNV) that all custom avatars speak with.
 const customVoiceName = (process.env.CUSTOM_VOICE_NAME || "").trim();
 const customVoiceEndpoint = (process.env.CUSTOM_VOICE_ENDPOINT_ID || "").trim();
@@ -224,6 +224,16 @@ function parseCustomAvatars() {
       gender: customGender,
     });
   }
+  if (!out.length && (customVoiceName || customVoiceProfileId)) {
+    out.push({
+      id: "custom-voice",
+      label: process.env.CUSTOM_AVATAR_LABEL || "Custom presenter",
+      character: "",
+      style: "",
+      photoModel: "",
+      gender: customGender,
+    });
+  }
   return out;
 }
 const CUSTOM_ENABLED = process.env.CUSTOM_AVATAR_ENABLED === "true";
@@ -246,7 +256,7 @@ function redirectUri(req) {
 }
 const appUrlOf = (req) => process.env.PUBLIC_BASE_URL || baseUrl(req);
 
-// Effective admin = bootstrap env admin (e.g. jonnychipz) OR stored isAdmin flag.
+// Effective admin is an approved user with the stored administrator flag.
 function effectiveAdmin(user) {
   return isApprovedAdmin(user);
 }
@@ -735,7 +745,7 @@ app.post("/admin/action", async (req, res) => {
 // ---- Avatar / voice visibility (built-in voices + custom avatars) ----
 // Visibility is one flat map { [id]: boolean } in settings; default = visible.
 // IDs are built-in voice ids (e.g. "en-GB-SoniaNeural") and custom avatar ids
-// (e.g. "jonnychipz"). An empty gender list would break the picker, so the
+// An empty gender list would break the picker, so the
 // end-user views fall back to "all visible for that gender" if everything is off.
 function isVisible(vis, id) { return vis[id] !== false; }
 

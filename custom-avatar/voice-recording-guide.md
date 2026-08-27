@@ -1,44 +1,48 @@
-# Voice recording guide — Professional Voice (your voice clone)
+# Professional voice recording guide
 
-A standalone **Professional Voice (Custom Neural Voice)** is the way to make a **photo** avatar truly sound like you. It needs a meaningful amount of clean, consistent recordings.
+> **Documentation:** [Custom avatar and voice](README.md) · [Consent](consent-statements.md) · [Voice deployment](voice-deployment.md) · [Home](../README.md)
 
-> 💡 If you go the **video-avatar** route instead, **voice sync** clones your voice automatically from the training video — you can skip this whole file. This guide is for the photo-avatar + your-voice combination, or anyone wanting top-quality voice.
+Use this guide for an approved standalone Professional/Custom Neural Voice. Current Microsoft requirements for dataset size, format, locale, and quality override this repository.
 
-## How much to record
-- **Minimum** to train: ~**300 utterances** (sentences). More is better.
-- **Recommended** for a high-quality, natural voice: **500–2,000** utterances.
-- Expect **1–3 hours** of recording for a few hundred lines, plus breaks.
+Official training-data guidance: <https://learn.microsoft.com/azure/ai-services/speech-service/how-to-custom-voice-training-data>
 
-## The script
-Use Microsoft's general recording scripts (statements, questions, exclamations across varied content), or supply your own domain text. For a GitHub sales coach, include:
-- product/pricing phrases ("Copilot Business is nineteen dollars per seat per month"),
-- coaching lines ("What's the customer's biggest pain right now?"),
-- numbers, currencies, and acronyms (USD, GBP, SSO, SCIM, CI/CD).
-Mix statements, questions and exclamations. Microsoft provides starter scripts in Speech Studio / Foundry when you create the project.
+## Recording plan
 
-## Recording quality (this matters most)
-- 🎙️ **Quiet room**, minimal echo. A treated room or a wardrobe of clothes works as a damped space.
-- 🎙️ **Good mic**, fixed distance (a hand-span from your mouth), pop filter if possible.
-- 🎚️ **Consistent**: same mic, same room, same time of day, same energy/pace across **all** sessions **and** the consent recording.
-- 🔇 Signal-to-noise high; no background hum, typing, traffic, HVAC.
-- Use a natural, warm delivery suitable for ClientSphere's meeting-coaching experience.
-- ⏸️ Leave a short silence at the start/end of each clip; re-record fluffed lines.
+1. Confirm Limited Access and organisational approval.
+2. Choose one supported locale and a clear intended speaking style.
+3. Obtain the current official talent-consent script.
+4. Use a Microsoft-provided script or build a reviewed script with varied statements, questions, numbers, abbreviations, names, and domain vocabulary.
+5. Record the dataset and consent with the same talent, microphone, room, and delivery style.
+6. Validate every transcript against its recording.
 
-## Format / data requirements
-- One clip per script line, or use Foundry's guided recorder.
-- Common spec: **WAV, mono, 16-bit, 24 kHz+** (follow the exact requirements shown in the Foundry training-data step).
-- Each audio file paired with its exact transcript (the tool guides this).
-- Details: https://learn.microsoft.com/azure/ai-services/speech-service/how-to-custom-voice-training-data
+## Quality checklist
 
-## Consent (don't skip)
-Record the **voice** consent statement (see `consent-statements.md` §3) with the **same mic and room** as the training data, as `.mp3`. Microsoft uses it to verify the voice is yours.
+- Quiet, acoustically controlled room.
+- Consistent microphone, gain, distance, sample format, and placement.
+- No clipping, hum, HVAC, keyboard, traffic, music, or other voices.
+- Natural, sustainable pace and energy.
+- Short clean silence at clip boundaries.
+- One utterance per file when required by the selected data format.
+- Exact transcript, punctuation, and spoken content match.
+- Re-record mistakes rather than editing words together.
 
-## After recording
-Proceed to `submission-guide.md` to upload, train, and deploy. Once deployed, set in `.env`:
+## Domain coverage for ClientSphere
 
-```ini
-CUSTOM_VOICE_NAME=<your CNV deployment/voice name, e.g. en-GB-JohnNeural>
-```
+Include approved examples of:
 
-## Naming convention
-Custom voice names typically look like `<locale>-<Name>Neural` (you choose the name during deployment). Use something recognisable, e.g. `en-GB-JohnNeural`.
+- customer and product names;
+- industry terms used in the configured portfolio;
+- currencies, percentages, dates, units, and acronyms;
+- discovery questions and concise meeting-coaching language;
+- citations, uncertainty, and synthetic-data disclosure.
+
+Do not include confidential customer facts, private conversations, secrets, or personal data in the training script.
+
+## Data handling
+
+- Keep raw recordings, transcripts, consent, and trained-asset identifiers outside Git.
+- Limit access to the approved training team.
+- Define retention, deletion, talent withdrawal, and incident-response procedures.
+- Do not repurpose the voice beyond the approved scenario.
+
+After data validation, follow [voice-deployment.md](voice-deployment.md).

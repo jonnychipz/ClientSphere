@@ -1,5 +1,7 @@
 # Optional approval email
 
+> **Documentation:** [Home](README.md) · [Manual setup](SELF-HOSTING.md) · [Authentication](AUTH-SETUP.md) · [Deployment](DEPLOYMENT.md)
+
 ClientSphere works without email; administrators can manage all requests at `/admin`.
 
 To enable transactional approval and decision email, create an Azure Communication Services Email resource with a verified sender, then set:
@@ -18,3 +20,13 @@ The script requests the connection string through a masked secure prompt, sends 
 Approval and deny links are two-step actions: a GET renders confirmation, and only an explicit POST applies the decision. This prevents email security scanners and link previewers from changing access.
 
 Email delivery failure never changes an access decision. The durable source of truth remains the admin dashboard and access registry.
+
+## Verify the result
+
+1. Run the helper and wait for its deployment workflow.
+2. Ask a non-admin GitHub user to sign in once.
+3. Confirm the admin notification is delivered.
+4. Use the email link to open the confirmation page, but confirm the decision there.
+5. Verify the same user status at `/admin`.
+
+If notifications are not required, leave all four email settings unset rather than committing placeholder values.

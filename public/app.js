@@ -785,8 +785,7 @@ function applySelection() {
 function populateVoices() {
   const list = state.cfg.voices[state.gender];
   els.voiceSelect.innerHTML = "";
-  // Custom avatar presets are gender-specific — only show those for the current
-  // gender (e.g. the male Jonnychipz avatars don't appear in the Female list).
+  // Custom avatar presets are gender-specific; show only the current group.
   const customList = state.cfg.customAvatars || (state.cfg.custom ? [state.cfg.custom] : []);
   let firstCustomVal = null;
   customList.filter((a) => (a.gender || "male") === state.gender).forEach((a) => {

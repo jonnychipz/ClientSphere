@@ -1,97 +1,90 @@
-# ClientSphere - Custom Avatar and Voice
+# Optional custom avatar and voice
 
-This folder is the kit for adding an approved Jonnychipz photo avatar and voice to ClientSphere through Azure AI Speech. The application is already wired for it, but the feature is disabled until those assets are available.
+> **Documentation:** [Home](../README.md) · [AI-assisted setup](../AI-SETUP-PROMPT.md) · [Manual setup](../SELF-HOSTING.md) · [Product tour](../docs/SCREENSHOTS.md)
 
-> ⚠️ **Both features are Limited Access (Responsible AI gated).** You must apply and be approved, and prove consent. This is not instant self-serve. Plan for **days** (photo avatar) to **weeks** (professional voice).
+This optional kit explains how an approved owner can add their own likeness and/or synthetic voice to ClientSphere through Azure Speech. Standard Azure voices and avatars work without this customisation.
 
----
+![Redacted standard avatar experience](../docs/images/clientsphere-avatar-live-redacted.png)
 
-## TL;DR — the path
+> Custom avatar and professional/custom voice capabilities are Limited Access features. Approval, explicit voice-talent consent, responsible use, disclosure, regional availability, and additional charges may apply. Check current Microsoft documentation before recording or purchasing services.
 
-| Step | What | Where | Effort |
-|------|------|-------|--------|
-| 1 | Apply for Limited Access (avatar **and** voice) | https://aka.ms/customneural | 1 form, then wait for approval |
-| 2 | Record your **consent videos/audio** | see `consent-statements.md` | 15 min |
-| 3 | Provide your **photo** (avatar) | see `photo-spec.md` | 5 min |
-| 4 | Record **voice training data** (for a true clone) | see `voice-recording-guide.md` | 1–3 hrs studio |
-| 5 | **Train** in Microsoft Foundry (Fine-tune → Azure Speech) | https://ai.azure.com | mostly waiting |
-| 6 | **Deploy** the custom voice to an endpoint | Foundry / Speech | minutes |
-| 7 | **Flip the flag** in `.env`, restart the app | this repo | 2 min |
+## Choose the smallest suitable option
 
----
+| Experience | Inputs | Limited Access | ClientSphere configuration |
+|---|---|---:|---|
+| Standard avatar and voice | None | No | No custom variables |
+| Standard avatar with approved custom voice | Voice consent, recordings, trained/deployed voice | Yes | Voice name and endpoint ID |
+| Approved custom photo avatar with standard voice | Eligible photo and avatar consent | Yes | Avatar character and photo base model |
+| Approved custom avatar and approved custom voice | Avatar media plus voice data/consent | Yes | Avatar and voice values |
 
-## Which avatar type fits you
+Use only a likeness or voice for which you have documented authority and consent. Never create an impersonation or use a custom voice/avatar deceptively.
 
-- **Custom Photo Avatar** — built from a **single photo**. Head-and-shoulders, 512×512, works in real-time. Best match for "use my photo". Set `CUSTOM_AVATAR_PHOTO_MODEL=vasa-1`.
-- **Custom Video Avatar** — built from **≥10 minutes of video** of you. Half/full body, more lifelike movement, and supports **voice sync** (an auto-cloned voice trained from the same video — no separate voice project needed). Leave `CUSTOM_AVATAR_PHOTO_MODEL` blank and set `CUSTOM_AVATAR_STYLE`.
+## End-to-end path
 
-> 💡 **Shortcut to "sounds like me":** a **video avatar with voice sync** clones your voice *for free alongside the avatar* from the training video — far less effort than a standalone Professional Voice. If you only have a photo, you'll pair it with either a standard voice or a separately-trained Professional Voice.
+1. Review current availability and policy:
+   - <https://aka.ms/customneural>
+   - <https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/what-is-custom-text-to-speech-avatar>
+   - <https://learn.microsoft.com/azure/ai-services/speech-service/custom-neural-voice>
+2. Complete any organisational Responsible AI, legal, privacy, and accessibility reviews.
+3. Apply for the required Limited Access capability with [access-application.md](access-application.md) as a drafting checklist.
+4. Obtain the current official consent script; see [consent-statements.md](consent-statements.md).
+5. Prepare photo/video or voice data:
+   - [photo-spec.md](photo-spec.md)
+   - [voice-recording-guide.md](voice-recording-guide.md)
+6. Train and deploy the approved asset using [submission-guide.md](submission-guide.md).
+7. Record the exact avatar/voice identifiers and configure ClientSphere.
+8. Add visible disclosure in the experience and test with intended users.
 
-## Which voice type
+## Local configuration
 
-- **Voice sync for avatar** — only with a **video** avatar; auto-cloned from the training video. Easiest.
-- **Professional Voice (Custom Neural Voice)** — a standalone high-quality clone from **300+ recorded utterances**; works with any avatar (incl. photo). Highest quality, most effort. See `voice-recording-guide.md`.
-- **Standard voice** — pick the closest Azure neural voice today (no gating). Good interim.
-
----
-
-## Azure resources to use
-
-| Need | Use |
-|------|-----|
-| Foundry/Speech resource | **`clientsphere-ai-95bc`** - S0, Sweden Central |
-| Region | **Sweden Central** (confirm it's in the custom-avatar *training* region list when you start; if not, create an S0 resource in a supported region and point `.env` at its STS endpoint) |
-| ❌ Not this one | `speech-avatar-jl` is **F0 (free)** — custom features need **S0** |
-
-> The app authenticates to Speech keylessly through `clientsphere-ai-95bc`. Train and deploy custom assets on that same resource.
-
----
-
-## Turning it on (after training)
-
-Edit `.env` in the repo root:
+Set only the values for assets that exist:
 
 ```ini
 CUSTOM_AVATAR_ENABLED=true
-CUSTOM_AVATAR_LABEL=You (custom)
-CUSTOM_AVATAR_GENDER=male            # controls fallback voice & which gender list it sits with
-CUSTOM_AVATAR_CHARACTER=<your avatar model name from Foundry>
-CUSTOM_AVATAR_STYLE=                 # video avatar only; blank for photo avatar
-CUSTOM_AVATAR_PHOTO_MODEL=vasa-1     # photo avatar only; blank for video avatar
-CUSTOM_VOICE_NAME=<your CNV deployment name, e.g. en-GB-JohnNeural>
+CUSTOM_AVATAR_LABEL=Custom presenter
+CUSTOM_AVATAR_GENDER=male
+CUSTOM_BODY_CHARACTER=harry
+CUSTOM_BODY_STYLE=business
+CUSTOM_AVATAR_CHARACTER=<approved-avatar-model-name>
+CUSTOM_AVATAR_STYLE=
+CUSTOM_AVATAR_PHOTO_MODEL=vasa-1
+CUSTOM_VOICE_NAME=<approved-voice-name>
+CUSTOM_VOICE_ENDPOINT_ID=<approved-endpoint-id>
+CUSTOM_VOICE_PROFILE_ID=
+CUSTOM_VOICE_BASE_MODEL=DragonLatestNeural
 ```
 
-Then:
+Then restart:
 
 ```powershell
 npm start
 ```
 
-A **⭐ You (custom)** entry appears at the top of the **Voice & body** dropdown. Selecting it uses your avatar (`avatarConfig.customized = true`, plus `photoAvatarBaseModel` for a photo avatar) and your voice. If you set only the voice (no avatar yet), it pairs your voice with a standard body; if you set only the avatar, it uses a standard voice — so you can light up each half as it becomes ready.
+For production, use the deployment-safe configuration method documented in [submission-guide.md](submission-guide.md); do not place these values directly in source files.
 
----
+## How the integration works
 
-## How the integration works (already built)
-
-- `server.mjs` reads the `CUSTOM_*` env vars into a `custom` object and returns it from `GET /api/config` (or `null` when disabled).
-- `public/app.js` adds the **"⭐ You (custom)"** option, and in `startAvatar()` sets:
-  - `avatarConfig.customized = true`
-  - `avatarConfig.photoAvatarBaseModel = "<photoModel>"` (photo avatar only)
-  - `speechConfig.speechSynthesisVoiceName = "<your voice>"`
-- Everything else (chroma-key scenes, barge-in, coaching, etc.) works unchanged.
-
----
+- `server.mjs` reads the `CUSTOM_*` settings and returns enabled choices from `GET /api/config`.
+- `public/app.js` applies the custom avatar and/or custom voice to Azure Speech.
+- The admin dashboard can show or hide enabled voice/avatar choices.
+- The feature remains off when `CUSTOM_AVATAR_ENABLED` is not `true`.
 
 ## Files in this kit
-- `consent-statements.md` — exact Microsoft consent wording (avatar + voice) to read on camera/mic.
-- `photo-spec.md` — photo requirements for a custom photo avatar.
-- `voice-recording-guide.md` — how to record professional-voice training data.
-- `submission-guide.md` — step-by-step Foundry fine-tuning + deployment.
 
-## Official references
-- Limited Access & intake form: https://aka.ms/customneural
-- Custom avatar overview: https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/what-is-custom-text-to-speech-avatar
-- Create custom avatar: https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/custom-avatar-create
-- Custom Neural Voice: https://learn.microsoft.com/azure/ai-services/speech-service/custom-neural-voice
-- Real-time avatar (API used by this app): https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/real-time-synthesis-avatar
-- Responsible AI / disclosure: https://learn.microsoft.com/azure/ai-foundry/responsible-ai/speech-service/text-to-speech/disclosure-voice-talent
+| File | Purpose |
+|---|---|
+| [access-application.md](access-application.md) | Reusable Limited Access application checklist |
+| [consent-statements.md](consent-statements.md) | How to obtain and record current official consent wording |
+| [photo-spec.md](photo-spec.md) | Photo preparation checklist |
+| [voice-recording-guide.md](voice-recording-guide.md) | Professional voice data guidance |
+| [submission-guide.md](submission-guide.md) | Training, deployment, configuration, and validation |
+| [voice-deployment.md](voice-deployment.md) | Detailed custom voice deployment handoff |
+
+## Completion criteria
+
+- Limited Access approval is confirmed for the target subscription/resource.
+- The talent and deploying organisation match the consent record.
+- The asset is deployed in a region compatible with the app.
+- ClientSphere starts the custom choice successfully.
+- Users can tell that the voice/avatar is synthetic.
+- A standard voice/avatar remains available as a fallback.

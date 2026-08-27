@@ -1,5 +1,7 @@
 # Deployment reference
 
+> **Documentation:** [Home](README.md) · [AI-assisted setup](AI-SETUP-PROMPT.md) · [Manual setup](SELF-HOSTING.md) · [Authentication](AUTH-SETUP.md) · [Storage](STORAGE.md)
+
 ClientSphere uses Bicep and GitHub Actions OIDC. It does not use an Azure publish profile, service-principal client secret, Azure AI key, Speech key, or registry password.
 
 For the complete first-time procedure, use [SELF-HOSTING.md](SELF-HOSTING.md).
@@ -38,6 +40,21 @@ With suffix `<suffix>`, `infra/main.bicep` creates:
 | Log Analytics | `log-clientsphere-<suffix>` |
 
 The Container App uses its system-assigned managed identity for Foundry, Speech, private image pulls, and access-state persistence through the Azure management plane.
+
+```mermaid
+flowchart TD
+    P[Push main] --> V[Validate code, tests, Bicep]
+    V --> O[GitHub OIDC sign-in]
+    O --> B[Deploy Bicep]
+    B --> R[Refresh public research if required]
+    R --> A[Create/update Foundry agents]
+    A --> C[Build image in ACR]
+    C --> D[Deploy Container App]
+    D --> H[Dynamic health smoke test]
+    H --> X[Remove obsolete managed agents/stores]
+```
+
+![Redacted Azure AI Foundry agent](docs/images/clientsphere-foundry-agent-redacted.png)
 
 ## Workflow
 
@@ -95,3 +112,16 @@ GH_OAUTH_CLIENT_SECRET
 ```
 
 Optional email values are documented in [EMAIL-WORKFLOW.md](EMAIL-WORKFLOW.md).
+
+Optional custom avatar/voice repository variables are managed by `scripts/configure-custom-avatar.ps1` and applied as Container App environment values by Bicep. They remain disabled by default; see [custom-avatar/README.md](custom-avatar/README.md).
+
+## Completion criteria
+
+A deployment is complete only when:
+
+- the workflow conclusion is `success`;
+- `/healthz` returns `status: "ok"`;
+- `customers` and `agentsConfigured` match `config/customers.json`;
+- `agentModesConfigured` is four times the customer count;
+- GitHub OAuth returns to the deployed `/auth/callback`;
+- the configured bootstrap login can open `/admin`.

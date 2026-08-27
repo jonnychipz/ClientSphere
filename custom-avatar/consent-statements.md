@@ -1,53 +1,35 @@
-# Consent statements (read these exactly)
+# Voice and avatar consent
 
-Microsoft **verifies** your recorded consent before training: it checks the spoken words match the script, and matches your face/voice in the consent recording against your training data. Use the **exact wording** below, in the **same language** as your training data. Fill the bracketed parts aloud.
+> **Documentation:** [Custom avatar and voice](README.md) · [Application checklist](access-application.md) · [Training](submission-guide.md) · [Home](../README.md)
 
-- For **John Lunn**, "first and last name" = **John Lunn**.
-- "the name of the company" = the company you record under, e.g. **Microsoft** (use whatever your approved application specifies).
+Microsoft verifies recorded consent before training custom voice or avatar assets. Consent wording and supported locales can change, so this repository deliberately does not duplicate a fixed script.
 
-Record clearly, in a quiet room, face well-lit and centred (for avatar) / same mic & environment as your training data (for voice).
+## Obtain the current official wording
 
----
+- Custom avatar documentation: <https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/custom-avatar-create>
+- Custom voice overview and consent: <https://learn.microsoft.com/azure/ai-services/speech-service/custom-neural-voice>
+- Microsoft Speech sample consent files: <https://github.com/Azure-Samples/cognitive-services-speech-sdk/tree/master/sampledata/customavatar>
+- Multi-language voice-talent statement: <https://github.com/Azure-Samples/Cognitive-Speech-TTS/blob/master/CustomVoice/script/verbal-statement-all-locales.txt>
 
-## 1. Custom AVATAR consent — record as VIDEO (you, on camera)
+Use the exact wording presented by the current portal or official documentation for the selected capability and locale.
 
-Use this when training a custom **photo** or **video** avatar **without** voice sync.
+## Recording checklist
 
-> **English (United Kingdom) — en-GB**
->
-> "I, **[state your first and last name]**, acknowledge and agree that my image or video recordings of my image and movements will be used by **[state the name of the company]** to create and use a photorealistic, synthetic avatar version of me."
+1. Use the talent's legal/approved name and the organisation name exactly as entered in the project.
+2. Use the same language/locale as the training data.
+3. Record avatar consent on video when the selected workflow requires video.
+4. Record professional voice consent in the format required by the current portal.
+5. Keep the face visible, audio clear, wording verbatim, and recording free from edits that change meaning.
+6. Use the same speaker/talent as the training media.
+7. Store consent evidence in an approved organisational location with appropriate access, retention, and deletion controls.
 
-Spoken example:
-> "I, John Lunn, acknowledge and agree that my image or video recordings of my image and movements will be used by Microsoft to create and use a photorealistic, synthetic avatar version of me."
+## Do not proceed when
 
----
+- the talent has not consented freely and explicitly;
+- the applicant is not authorised by the deploying organisation;
+- the intended use differs materially from the approved use case;
+- the experience lacks clear synthetic-media disclosure;
+- a third party's image or voice would be used without documented authority;
+- the current Microsoft portal rejects or cannot verify the recording.
 
-## 2. Custom avatar WITH voice sync — record as VIDEO
-
-Use this **only** when training a **video** avatar and you want the auto-cloned "voice sync" voice at the same time. (Photo avatars don't support voice sync.) The consent must cover **both** image and voice. Get the exact dual-scope wording here and read it verbatim on camera:
-
-- `verbal-statement-voice-sync-for-avatar-all-locales.txt` →
-  https://github.com/Azure-Samples/cognitive-services-speech-sdk/blob/master/sampledata/customavatar/verbal-statement-voice-sync-for-avatar-all-locales.txt
-
----
-
-## 3. Professional VOICE (Custom Neural Voice) consent — record as AUDIO
-
-Use this when training a standalone Professional Voice from your recordings. Record with the **same mic, environment and speaking style** as your voice training data, and save as `.mp3`.
-
-> **English (United Kingdom) — en-GB**
->
-> "I, **[state your first and last name]**, am aware that recordings of my voice will be used by **[state the name of the company]** to create and use a synthetic version of my voice."
-
-Spoken example:
-> "I, John Lunn, am aware that recordings of my voice will be used by Microsoft to create and use a synthetic version of my voice."
-
-Full multi-language list:
-https://github.com/Azure-Samples/Cognitive-Speech-TTS/blob/master/CustomVoice/script/verbal-statement-all-locales.txt
-
----
-
-## Notes
-- The **voice talent name** and **company name** you enter in Foundry must match exactly what you say in the recording, in the same language.
-- Keep the consent recording in the **same language** as the training data.
-- Consent recordings are retained by Microsoft for verification/compliance.
+Consent is not a one-time documentation exercise. Provide a process for talent withdrawal, asset deactivation, incident response, and periodic review.

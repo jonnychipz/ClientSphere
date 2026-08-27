@@ -1,8 +1,14 @@
 # ClientSphere Design System
 
+> **Documentation:** [Home](README.md) · [Product definition](PRODUCT.md) · [Product tour](docs/SCREENSHOTS.md) · [AI-assisted setup](AI-SETUP-PROMPT.md)
+
+Use this document when changing branding, layout, controls, or screenshots in a repurposed deployment.
+
 ## Intent
 
 ClientSphere is used on a seller's laptop in office and presentation-room lighting, often while the user is speaking and scanning rather than reading. The interface uses a low-glare dark shell, restrained violet actions, and high-contrast customer identity so it remains calm on a shared screen.
+
+![Redacted structured workflow](docs/images/clientsphere-workflow-redacted.png)
 
 ## Color
 
@@ -49,3 +55,27 @@ Motion communicates state only: selector open/close, drawer transition, listenin
 ## Customer Branding
 
 Customer logos are sourced from official public websites and displayed without alteration. Customer color is an accent, not a theme replacement. The ClientSphere shell remains visually stable when customers change.
+
+## Rebranding a fork
+
+Review these surfaces together:
+
+| Surface | Source |
+|---|---|
+| Product name, tagline, and runtime configuration | `server.mjs` |
+| About owner/contact panel | `public/index.html` |
+| Login and access-state pages | `public/login.html`, `public/pending.html`, `public/denied.html` |
+| Email wording and contact metadata | `email.mjs`, GitHub email variables |
+| Icon and static imagery | `public/favicon.svg`, `public/backgrounds/` |
+| Documentation screenshots | `docs/images/`, `docs/SCREENSHOTS.md` |
+
+Never encode tenant IDs, subscription IDs, secrets, private customer notes, or production user details in browser assets.
+
+## Screenshot standard
+
+- Use redacted or synthetic data only.
+- Capture at a readable desktop resolution.
+- Crop out browser profiles, bookmarks, notifications, and unrelated tabs.
+- Remove usernames, email addresses, account identifiers, and secret-bearing URLs.
+- Add alt text and an explanatory caption in Markdown.
+- Label synthetic inputs and outcomes in the application before capture.

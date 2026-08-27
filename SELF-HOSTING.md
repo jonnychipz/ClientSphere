@@ -1,6 +1,12 @@
 # Self-hosting ClientSphere
 
+> **Documentation:** [Home](README.md) · [AI-assisted setup](AI-SETUP-PROMPT.md) · [Product tour](docs/SCREENSHOTS.md) · [Deployment](DEPLOYMENT.md) · [Authentication](AUTH-SETUP.md)
+
 This guide takes a new owner from a clone to a production ClientSphere deployment containing only their customer catalogue, with their GitHub account controlling application access.
+
+> **Prefer an agent to perform these steps?** Open your clone in Microsoft Scout or GitHub Copilot and paste the complete [AI-assisted repurposing prompt](AI-SETUP-PROMPT.md). This file remains the canonical manual reference the agent must follow.
+
+![Redacted ClientSphere workspace](docs/images/clientsphere-overview-redacted.png)
 
 ## End state
 
@@ -151,6 +157,7 @@ az account show --query "{subscription:id, tenant:tenantId, name:name}" --output
 
 gh auth login
 gh auth status
+gh repo set-default "<your-owner>/<your-repository>"
 gh repo view --json nameWithOwner,url
 ```
 

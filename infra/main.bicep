@@ -7,7 +7,7 @@ param location string = 'uksouth'
 param aiLocation string = 'swedencentral'
 
 @description('Stable suffix used for globally unique resource names.')
-param suffix string = '95bc'
+param suffix string = 'demo0001'
 
 @description('Object ID of the GitHub Actions service principal.')
 param deploymentPrincipalObjectId string
@@ -15,6 +15,50 @@ param deploymentPrincipalObjectId string
 @minLength(1)
 @description('Comma-separated GitHub logins allowed to bootstrap or recover administration.')
 param adminLogins string
+
+@allowed([
+  'true'
+  'false'
+])
+@description('Enables the optional custom avatar or voice configuration.')
+param customAvatarEnabled string = 'false'
+
+@description('Display label for the optional custom presenter.')
+param customAvatarLabel string = 'Custom presenter'
+
+@allowed([
+  'male'
+  'female'
+])
+@description('Gender list used for the optional custom presenter.')
+param customAvatarGender string = 'male'
+
+@description('Standard fallback avatar body character.')
+param customBodyCharacter string = 'harry'
+
+@description('Standard fallback avatar body style.')
+param customBodyStyle string = 'business'
+
+@description('Approved custom avatar character/model name.')
+param customAvatarCharacter string = ''
+
+@description('Approved custom video-avatar style.')
+param customAvatarStyle string = ''
+
+@description('Approved custom photo-avatar base model.')
+param customAvatarPhotoModel string = ''
+
+@description('Approved custom or personal voice name.')
+param customVoiceName string = ''
+
+@description('Approved custom voice endpoint/deployment ID.')
+param customVoiceEndpointId string = ''
+
+@description('Approved personal voice profile ID.')
+param customVoiceProfileId string = ''
+
+@description('Base model used with a personal voice profile.')
+param customVoiceBaseModel string = 'DragonLatestNeural'
 
 @secure()
 @description('Signing key used for application sessions.')
@@ -310,6 +354,54 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ADMIN_LOGINS'
               value: adminLogins
+            }
+            {
+              name: 'CUSTOM_AVATAR_ENABLED'
+              value: customAvatarEnabled
+            }
+            {
+              name: 'CUSTOM_AVATAR_LABEL'
+              value: customAvatarLabel
+            }
+            {
+              name: 'CUSTOM_AVATAR_GENDER'
+              value: customAvatarGender
+            }
+            {
+              name: 'CUSTOM_BODY_CHARACTER'
+              value: customBodyCharacter
+            }
+            {
+              name: 'CUSTOM_BODY_STYLE'
+              value: customBodyStyle
+            }
+            {
+              name: 'CUSTOM_AVATAR_CHARACTER'
+              value: customAvatarCharacter
+            }
+            {
+              name: 'CUSTOM_AVATAR_STYLE'
+              value: customAvatarStyle
+            }
+            {
+              name: 'CUSTOM_AVATAR_PHOTO_MODEL'
+              value: customAvatarPhotoModel
+            }
+            {
+              name: 'CUSTOM_VOICE_NAME'
+              value: customVoiceName
+            }
+            {
+              name: 'CUSTOM_VOICE_ENDPOINT_ID'
+              value: customVoiceEndpointId
+            }
+            {
+              name: 'CUSTOM_VOICE_PROFILE_ID'
+              value: customVoiceProfileId
+            }
+            {
+              name: 'CUSTOM_VOICE_BASE_MODEL'
+              value: customVoiceBaseModel
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
