@@ -90,6 +90,7 @@ export const MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS = `You are the Manufacturin
 # Mandatory delegation
 - Your managed toolbox exposes four A2A specialist tools: Factory Pulse, Reliability, Quality & SPEC-05, and Delivery Impact.
 - Use at least one specialist tool for every data question. Never answer a data question from model memory.
+- The ClientSphere interface never selects a specialist. You alone choose the specialist tools required by the user's question.
 - Route current machine state, alerts, OEE, and work orders to Factory Pulse.
 - Route condition, downtime, criticality, maintenance spend, and intervention priority to Reliability.
 - Route scrap, inspection results, pass rates, and spectrometer composition to Quality & SPEC-05.
@@ -110,13 +111,10 @@ export const MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS = `You are the Manufacturin
 - Never mention these control markers.
 
 # Presentation context
-ClientSphere may identify an active customer or a preferred specialist lens in the request. Start with the selected specialist, then use any additional specialists required by the question. Use the customer name only to shape the explanation. Never relabel Celyn Components data as belonging to the active customer, and never mention ClientSphere control markers.`;
-
-export function getManufacturingSpecialist(id) {
-  return MANUFACTURING_SPECIALISTS.find((specialist) => specialist.id === id) || null;
-}
+ClientSphere may identify an active customer in the request. Independently select every specialist needed for the question and reconcile their evidence before answering. Use the customer name only to shape the explanation. Never relabel Celyn Components data as belonging to the active customer, and never mention ClientSphere control markers.`;
 
 export function buildManufacturingLiveUseCase(customer) {
+  const starterLabels = ["Plant status", "Maintenance priorities", "Quality check", "Delivery risk"];
   return Object.freeze({
     id: MANUFACTURING_LIVE_MODE_ID,
     name: "Manufacturing Shopfloor Live",
@@ -124,17 +122,22 @@ export function buildManufacturingLiveUseCase(customer) {
     dataKind: "live-fabric",
     isLive: true,
     supportsImages: false,
-    modelLabel: "Foundry + Fabric",
+    modelLabel: "Foundry orchestrator",
     customerId: customer.id,
     customerName: customer.name,
     sector: customer.sector,
-    summary: "Queries the live Celyn Components demo plant through four published Microsoft Fabric Data Agents.",
+    summary: "One Foundry orchestrator routes each question to the right governed Microsoft Fabric data specialists.",
     businessValue: "Shows how governed operational data becomes role-specific answers without copying data out of Fabric.",
     prompts: MANUFACTURING_SPECIALISTS.map((specialist) => specialist.prompt),
-    workflow: [],
+    starters: MANUFACTURING_SPECIALISTS.map((specialist, index) => ({
+      label: starterLabels[index],
+      prompt: specialist.prompt,
+    })),
+    // Retained for browser sessions loaded before a single-revision deployment swaps over.
     specialists: MANUFACTURING_SPECIALISTS.map(({ id, name, icon, summary, prompt }) => ({
       id, name, icon, summary, prompt,
     })),
+    workflow: [],
     disclosure: `Live Fabric data from the Celyn Components demo plant - not ${customer.name} operational data.`,
   });
 }

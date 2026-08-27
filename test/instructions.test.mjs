@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildCustomerInstructions, buildUseCaseInstructions } from "../instructions.mjs";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerUseCases } from "../use-case-registry.mjs";
+import { MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS } from "../manufacturing-live.mjs";
 
 test("customer prompt names and isolates the assigned organisation", () => {
   const customer = customers[0];
@@ -28,4 +29,11 @@ test("synthetic use-case prompt is detailed internally and concise conversationa
   assert.match(prompt, /RESPONSE_MODE:STRUCTURED/);
   assert.match(prompt, /normally no more than 70 words/);
   for (const step of useCase.workflow) assert.match(prompt, new RegExp(step.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("live orchestrator owns specialist routing", () => {
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /interface never selects a specialist/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /you alone choose the specialist tools/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /use at least one specialist tool for every data question/i);
+  assert.doesNotMatch(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /preferred specialist lens/i);
 });

@@ -26,7 +26,11 @@ test("every customer receives three synthetic use cases and one live Fabric mode
     assert.equal(live.id, "manufacturing-live");
     assert.equal(live.isLive, true);
     assert.equal(live.specialists.length, 4);
+    assert.equal(live.starters.length, 4);
+    assert.equal(new Set(live.starters.map((starter) => starter.label)).size, 4);
+    assert.deepEqual(live.starters.map((starter) => starter.prompt), live.prompts);
     assert.equal(live.workflow.length, 0);
+    assert.match(live.summary, /one Foundry orchestrator/i);
     assert.match(live.disclosure, new RegExp(`not ${customer.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} operational data`, "i"));
   }
 });

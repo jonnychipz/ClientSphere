@@ -14,7 +14,7 @@ import {
 } from "./customer-registry.mjs";
 import { buildCustomerSyntheticUseCases, buildCustomerUseCases, getCustomerUseCase } from "./use-case-registry.mjs";
 import {
-  MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_SPECIALISTS, getManufacturingSpecialist,
+  MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_SPECIALISTS,
 } from "./manufacturing-live.mjs";
 import { resolveCustomerLogo } from "./customer-logo.mjs";
 import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
@@ -144,14 +144,13 @@ function resourcesFor(customer) {
     },
     {
       group: "Live Fabric data",
-      links: MANUFACTURING_SPECIALISTS.map((specialist) => ({
-        icon: specialist.icon,
-        title: specialist.name,
+      links: [{
+        icon: "activity",
+        title: "Manufacturing Shopfloor Live",
         sub: "Celyn Components live demo plant",
-        prompt: specialist.prompt,
+        prompt: "Give me a live operational briefing across plant status, reliability, quality, and delivery risk.",
         agentMode: MANUFACTURING_LIVE_MODE_ID,
-        liveSpecialist: specialist.id,
-      })),
+      }],
     },
     {
       group: "Public sources",
@@ -1027,7 +1026,7 @@ async function runAgent(previousResponseId, agentName, customer, input, options 
 app.post("/api/chat", requireApproved(async (req, res) => {
   const {
     message, threadId, customerId, agentMode = "general", responseMode = "brief",
-    attachments, liveSpecialist = "factory-pulse",
+    attachments,
   } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   if (!["brief", "structured"].includes(responseMode)) return res.status(400).json({ error: "valid responseMode required" });
@@ -1037,8 +1036,6 @@ app.post("/api/chat", requireApproved(async (req, res) => {
   const useCase = agentMode === "general" ? null : getCustomerUseCase(customer, agentMode);
   if (agentMode !== "general" && !useCase) return res.status(400).json({ error: "valid agentMode required" });
   const isLiveFabric = agentMode === MANUFACTURING_LIVE_MODE_ID;
-  const specialist = isLiveFabric ? getManufacturingSpecialist(liveSpecialist) : null;
-  if (isLiveFabric && !specialist) return res.status(400).json({ error: "valid liveSpecialist required" });
   if (isLiveFabric && attachments?.length) {
     return res.status(400).json({ error: "The live Fabric mode accepts text questions only." });
   }
@@ -1060,12 +1057,9 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     const customerContext = isLiveFabric
       ? `\n[[CLIENTSPHERE_CONTEXT: The active customer is ${customer.name}. The Fabric data belongs to the Celyn Components demo plant, not ${customer.name}.]]`
       : "";
-    const specialistContext = isLiveFabric
-      ? `\n[[CLIENTSPHERE_SPECIALIST_LENS: Start with ${specialist.name}. Use any additional specialists required by the question.]]`
-      : "";
-    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]${customerContext}${specialistContext}\n${message.trim()}`;
+    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]${customerContext}\n${message.trim()}`;
     const input = buildAgentInput(controlledMessage, attachments);
-    const agentContext = isLiveFabric ? specialist.id : "";
+    const agentContext = isLiveFabric ? "orchestrator" : "";
     let previousResponseId = null;
     if (threadId) {
       previousResponseId = verifyThreadToken(
@@ -1112,7 +1106,7 @@ app.post("/api/chat", requireApproved(async (req, res) => {
       ),
       customerId: customer.id,
       agentMode,
-      liveSpecialist: specialist?.id || null,
+      agentRole: isLiveFabric ? "orchestrator" : null,
       responseMode,
       reply,
       citations,

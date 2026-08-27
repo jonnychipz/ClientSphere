@@ -120,21 +120,28 @@
       </div>
 
       <section class="agent-switcher" aria-labelledby="agentSwitcherTitle">
-        <div class="agent-switcher-head">
-          <div>
-            <strong id="agentSwitcherTitle">Agent mode</strong>
-            <span>General adviser + 3 synthetic demos + live Fabric</span>
-          </div>
+        <div class="agent-control-row">
+          <label class="agent-mode-select-field" for="agentModeSelect">
+            <span id="agentSwitcherTitle">Experience</span>
+            <select id="agentModeSelect" aria-describedby="agentModeSummary"></select>
+          </label>
           <div class="response-mode-control">
-            <span class="agent-mode-badge" id="agentModeBadge">General</span>
+            <span>Response</span>
             <div class="seg response-mode-seg" id="responseModeSeg" aria-label="Response detail">
               <button type="button" data-response-mode="brief" class="active">Brief + voice</button>
               <button type="button" data-response-mode="structured">Structured</button>
             </div>
           </div>
         </div>
-        <div class="agent-mode-grid" id="agentModeGrid" role="tablist" aria-label="Customer agents"></div>
-        <div class="agent-mode-detail" id="agentModeDetail"></div>
+        <div class="agent-mode-summary">
+          <span class="agent-mode-badge" id="agentModeBadge">General</span>
+          <p id="agentModeSummary">Choose a customer to load an experience.</p>
+        </div>
+        <div class="agent-mode-status" id="agentModeStatus" hidden></div>
+        <details class="agent-mode-disclosure" id="agentModeDisclosure">
+          <summary><span>Prompts and details</span><small>Optional</small></summary>
+          <div class="agent-mode-detail" id="agentModeDetail"></div>
+        </details>
       </section>
 
       <div class="roleplay-banner" id="roleplayBanner" hidden>

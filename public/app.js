@@ -88,7 +88,10 @@ const els = {
   customerName: document.getElementById("customerName"),
   customerSector: document.getElementById("customerSector"),
   customerOverline: document.getElementById("customerOverline"),
-  agentModeGrid: document.getElementById("agentModeGrid"),
+  agentModeSelect: document.getElementById("agentModeSelect"),
+  agentModeSummary: document.getElementById("agentModeSummary"),
+  agentModeStatus: document.getElementById("agentModeStatus"),
+  agentModeDisclosure: document.getElementById("agentModeDisclosure"),
   agentModeDetail: document.getElementById("agentModeDetail"),
   agentModeBadge: document.getElementById("agentModeBadge"),
   responseModeSeg: document.getElementById("responseModeSeg"),
@@ -111,7 +114,6 @@ const state = {
   customerLoadId: 0,
   resources: [],
   agentMode: "general",
-  liveSpecialist: "factory-pulse",
   fabricAuth: { available: false, configured: false, connected: false, loading: true },
   responseMode: "brief",
   attachment: null,
@@ -160,10 +162,11 @@ function toast(msg, ms = 4200) {
 function setCustomerControlsDisabled(disabled) {
   const controls = [
     els.input, els.sendBtn, els.voiceToggle, els.roleplayBtn,
-    els.briefBtn, els.recapBtn, els.attachBtn,
+    els.briefBtn, els.recapBtn, els.attachBtn, els.agentModeSelect,
   ];
   controls.forEach((control) => { if (control) control.disabled = disabled; });
-  els.agentModeGrid?.querySelectorAll("button").forEach((control) => { control.disabled = disabled; });
+  els.agentModeDetail?.querySelectorAll("button").forEach((control) => { control.disabled = disabled; });
+  els.agentModeStatus?.querySelectorAll("button").forEach((control) => { control.disabled = disabled; });
 }
 function setStatus(text, cls) {
   els.status.textContent = text;
@@ -287,7 +290,6 @@ async function runChat(prompt, opts = {}) {
         threadId: state.threadId,
         customerId: state.customer?.id,
         agentMode: state.agentMode,
-        liveSpecialist: state.liveSpecialist,
         responseMode: state.responseMode,
         attachments: opts.attachment ? [opts.attachment] : [],
       }),
@@ -335,7 +337,7 @@ function kickoffGreeting() {
   state.greeted = true;
   const mode = currentModeDefinition();
   if (mode.isLive) {
-    const greeting = `The ${mode.name} is ready. Choose Operations, Reliability, Quality, or Delivery, then ask a live Fabric data question.`;
+    const greeting = `The ${mode.name} orchestrator is ready. Ask one live Fabric data question and it will route the work automatically.`;
     addMessage("bot", greeting);
     if (state.voiceOn && (state.avatarLive || state.voiceFallback)) speak(greeting);
     return;
@@ -979,7 +981,11 @@ function setCustomerRequired(required) {
   els.customerInitials.textContent = "?";
   els.avatarIdleCopy.textContent = "Choose a customer to load its advisers.";
   els.input.placeholder = "Choose a customer before starting a conversation";
-  els.agentModeGrid.innerHTML = "";
+  els.agentModeSelect.innerHTML = '<option value="">Choose a customer first</option>';
+  els.agentModeSummary.textContent = "Choose a customer to load an experience.";
+  els.agentModeStatus.hidden = true;
+  els.agentModeStatus.innerHTML = "";
+  els.agentModeDisclosure.open = false;
   els.agentModeDetail.innerHTML = "<div class=\"agent-detail-copy\"><p>Select a customer to load its general adviser, three tailored synthetic demos, and the shared live Fabric experience.</p></div>";
   els.agentModeBadge.textContent = "Waiting";
   els.messages.innerHTML =
@@ -1022,6 +1028,14 @@ function currentModeDefinition() {
   return agentModes().find((mode) => mode.id === state.agentMode) || generalModeDefinition();
 }
 
+function liveStarters(mode) {
+  const labels = ["Plant status", "Maintenance priorities", "Quality check", "Delivery risk"];
+  return mode.starters || (mode.prompts || []).map((prompt, index) => ({
+    label: labels[index] || `Live question ${index + 1}`,
+    prompt,
+  }));
+}
+
 async function refreshFabricStatus({ rerender = true } = {}) {
   state.fabricAuth = { ...state.fabricAuth, loading: true };
   if (rerender && currentModeDefinition().isLive) renderAgentModes();
@@ -1061,28 +1075,6 @@ function renderFabricAuthRequired(data) {
   els.messages.scrollTop = els.messages.scrollHeight;
 }
 
-function selectLiveSpecialist(specialistId, options = {}) {
-  const mode = currentModeDefinition();
-  if (!mode.isLive || !mode.specialists.some((item) => item.id === specialistId)) return;
-  if (state.liveSpecialist === specialistId && options.force !== true) return;
-  interruptAvatar();
-  stopListening();
-  state.generation += 1;
-  state.busy = false;
-  els.sendBtn.disabled = false;
-  state.liveSpecialist = specialistId;
-  state.threadId = null;
-  state.pending = null;
-  state.greeted = false;
-  try { localStorage.setItem("clientsphere.liveSpecialist", specialistId); } catch {}
-  renderAgentModes();
-  if (options.welcome !== false) renderWelcome();
-  if (options.announce !== false) {
-    const specialist = mode.specialists.find((item) => item.id === specialistId);
-    toast(`${specialist.name} live Fabric specialist selected.`);
-  }
-}
-
 async function disconnectFabric() {
   const response = await fetch("/api/fabric/disconnect", { method: "POST" });
   if (!response.ok) {
@@ -1111,28 +1103,24 @@ function selectResponseMode(mode) {
 function renderAgentModes() {
   const modes = agentModes();
   const active = currentModeDefinition();
-  els.agentModeGrid.innerHTML = "";
+  els.agentModeSelect.innerHTML = "";
   for (const mode of modes) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `agent-mode-card${mode.isLive ? " live-mode" : ""}`;
-    button.dataset.agentMode = mode.id;
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-selected", String(mode.id === state.agentMode));
+    const option = document.createElement("option");
+    option.value = mode.id;
     const shortName = mode.id === "general" ? "General Adviser" : mode.isLive ? "Shopfloor Live" : mode.name;
-    button.innerHTML =
-      `<span class="mode-top"><span class="mode-icon">${icon(mode.icon || "compass", 14)}</span>` +
-      `<strong>${escapeHtml(shortName)}</strong></span>` +
-      `<small>${mode.isLive ? '<span class="live-dot"></span>' : ""}${escapeHtml(mode.modelLabel || "GPT-5.6")}</small>`;
-    button.addEventListener("click", () => selectAgentMode(mode.id));
-    els.agentModeGrid.appendChild(button);
+    option.textContent = shortName;
+    option.selected = mode.id === state.agentMode;
+    els.agentModeSelect.appendChild(option);
   }
 
   const isLive = Boolean(active.isLive);
-  els.agentModeBadge.textContent = active.id === "general" ? "General" : isLive ? "Live Fabric data" : "Synthetic demo";
+  els.agentModeBadge.textContent = active.id === "general" ? "General" : isLive ? "Live orchestrator" : "Synthetic demo";
   els.agentModeBadge.classList.toggle("live-data", isLive);
+  els.agentModeSummary.textContent = active.summary;
+  els.agentModeStatus.hidden = true;
+  els.agentModeStatus.innerHTML = "";
   const meta = isLive
-    ? ["4 Fabric Data Agents", "Live KQL + Lakehouse SQL", "Entra-authorized"]
+    ? ["Foundry orchestrator", "Governed Fabric data"]
     : [
       active.modelLabel || "GPT-5.6",
       active.supportsImages ? "Multimodal" : "Text + web",
@@ -1140,16 +1128,9 @@ function renderAgentModes() {
       ...(active.id === "general" ? [] : ["Code Interpreter"]),
     ];
   if (isLive) {
-    const selected = active.specialists.find((item) => item.id === state.liveSpecialist) || active.specialists[0];
-    state.liveSpecialist = selected.id;
-    const specialistButtons = active.specialists.map((specialist) =>
-      `<button type="button" class="live-specialist${specialist.id === selected.id ? " active" : ""}" ` +
-      `data-live-specialist="${escapeHtml(specialist.id)}" aria-pressed="${specialist.id === selected.id}">` +
-      `<span>${icon(specialist.icon, 14)}</span><span><b>${escapeHtml(specialist.name)}</b><small>${escapeHtml(specialist.summary)}</small></span></button>`
-    ).join("");
-    const promptButtons = active.specialists.map((specialist) =>
-      `<button type="button" data-demo-prompt="${escapeHtml(specialist.prompt)}" ` +
-      `data-live-prompt-specialist="${escapeHtml(specialist.id)}">${escapeHtml(specialist.prompt)}</button>`
+      const starters = liveStarters(active);
+      const promptButtons = starters.map((starter) =>
+        `<button type="button" data-demo-prompt="${escapeHtml(starter.prompt)}">${escapeHtml(starter.label)}</button>`
     ).join("");
     const auth = state.fabricAuth;
     const authMarkup = auth.loading
@@ -1163,50 +1144,46 @@ function renderAgentModes() {
           ? '<span class="fabric-auth-indicator required" aria-hidden="true"></span><span class="fabric-auth-copy"><b>CONNECT TO FABRIC</b><small>Microsoft Entra is required for live governed data.</small></span>' +
             `<button type="button" class="fabric-auth-action primary" data-fabric-connect>Connect Entra</button>`
           : '<span class="fabric-auth-indicator warning" aria-hidden="true"></span><span class="fabric-auth-copy warning"><b>LIVE DATA UNAVAILABLE</b><small>Microsoft Entra has not been configured.</small></span>';
+    els.agentModeStatus.hidden = false;
+    els.agentModeStatus.innerHTML = `<div class="fabric-auth-row">${authMarkup}</div>`;
     els.agentModeDetail.innerHTML =
-      `<div class="agent-detail-copy live-detail"><p><b>${escapeHtml(active.name)}</b> - ${escapeHtml(active.summary)}</p>` +
+      `<div class="agent-detail-copy live-detail"><p class="live-disclosure">${escapeHtml(active.disclosure)}</p>` +
       `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
-      `<p class="live-disclosure">${escapeHtml(active.disclosure)}</p><div class="live-specialists">${specialistButtons}</div>` +
+      `<p>Ask naturally. The orchestrator selects and combines the underlying data specialists for every turn.</p>` +
       `<div class="agent-demo-prompts live-prompts">${promptButtons}</div></div>` +
-      `<aside class="live-source-panel"><strong>${escapeHtml(selected.name)}</strong><p>${escapeHtml(selected.summary)}</p>` +
-      `<div class="fabric-auth-label">${icon("shield", 13)} Identity &amp; data access</div><div class="fabric-auth-row">${authMarkup}</div>` +
-      `<small>Source: Microsoft Fabric · Manufacturing-RTI-Demo<br>Queries run with the connected user’s Fabric permissions.</small></aside>`;
-    els.agentModeDetail.querySelectorAll("[data-live-specialist]").forEach((button) => {
-      button.addEventListener("click", () => selectLiveSpecialist(button.dataset.liveSpecialist));
-    });
+      `<aside class="live-source-panel"><strong>Governed live data</strong>` +
+      `<p>Source: Microsoft Fabric · Manufacturing-RTI-Demo</p>` +
+      `<small>Queries run with the connected user’s Fabric permissions. Underlying data agents are delegated by the orchestrator, not selected in ClientSphere.</small></aside>`;
     els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
-      button.addEventListener("click", () => {
-        selectLiveSpecialist(button.dataset.livePromptSpecialist, { announce: false, welcome: false });
-        sendMessage(button.dataset.demoPrompt);
-      });
+      button.addEventListener("click", () => sendMessage(button.dataset.demoPrompt));
     });
-    els.agentModeDetail.querySelector("[data-fabric-connect]")?.addEventListener("click", () => {
+    els.agentModeStatus.querySelector("[data-fabric-connect]")?.addEventListener("click", () => {
       location.href = state.fabricAuth.connectUrl || "/auth/fabric/start?returnTo=%2F";
     });
-    els.agentModeDetail.querySelector("[data-fabric-disconnect]")?.addEventListener("click", disconnectFabric);
+    els.agentModeStatus.querySelector("[data-fabric-disconnect]")?.addEventListener("click", disconnectFabric);
   } else {
-  const scenes = active.demoScenes || (active.prompts || []).map((prompt, index) => ({
-    label: `${index + 1}. Starter`,
-    title: prompt,
-    prompt,
-  }));
-  const promptButtons = scenes.slice(0, 3)
-    .map((scene) => `<button type="button" data-demo-prompt="${escapeHtml(scene.prompt)}" title="${escapeHtml(scene.title)}">${escapeHtml(scene.label)} · ${escapeHtml(scene.title)}</button>`)
-    .join("");
-  const sampleData = active.demoScenes?.[0]?.syntheticData;
-  const sampleDataMarkup = sampleData
-    ? `<details><summary>Synthetic demo data</summary><dl>${Object.entries(sampleData).map(([key, value]) => `<div><dt>${escapeHtml(key.replace(/([A-Z])/g, " $1"))}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("")}</dl></details>`
-    : "";
-  const workflow = active.workflow?.length
-    ? `<div class="agent-workflow"><details><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>${sampleDataMarkup}</div>`
-    : `<div class="agent-workflow"><details><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details></div>`;
-  els.agentModeDetail.innerHTML =
-    `<div class="agent-detail-copy"><p><b>${escapeHtml(active.name)}</b> - ${escapeHtml(active.summary)}</p>` +
-    `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
-    `<p>${escapeHtml(active.businessValue)}</p><div class="agent-demo-prompts">${promptButtons}</div></div>${workflow}`;
-  els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
-    button.addEventListener("click", () => sendMessage(button.dataset.demoPrompt));
-  });
+    const scenes = active.demoScenes || (active.prompts || []).map((prompt, index) => ({
+      label: `${index + 1}. Starter`,
+      title: prompt,
+      prompt,
+    }));
+    const promptButtons = scenes.slice(0, 3)
+      .map((scene) => `<button type="button" data-demo-prompt="${escapeHtml(scene.prompt)}" title="${escapeHtml(scene.title)}">${escapeHtml(scene.label)} · ${escapeHtml(scene.title)}</button>`)
+      .join("");
+    const sampleData = active.demoScenes?.[0]?.syntheticData;
+    const sampleDataMarkup = sampleData
+      ? `<details><summary>Synthetic demo data</summary><dl>${Object.entries(sampleData).map(([key, value]) => `<div><dt>${escapeHtml(key.replace(/([A-Z])/g, " $1"))}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("")}</dl></details>`
+      : "";
+    const workflow = active.workflow?.length
+      ? `<div class="agent-workflow"><details><summary>6-step workflow</summary><ol>${active.workflow.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>${sampleDataMarkup}</div>`
+      : `<div class="agent-workflow"><details><summary>General coaching scope</summary><ol><li>Answer concisely</li><li>Ground material claims</li><li>Expand only when asked</li></ol></details></div>`;
+    els.agentModeDetail.innerHTML =
+      `<div class="agent-detail-copy"><p>${escapeHtml(active.businessValue)}</p>` +
+      `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
+      `<div class="agent-demo-prompts">${promptButtons}</div></div>${workflow}`;
+    els.agentModeDetail.querySelectorAll("[data-demo-prompt]").forEach((button) => {
+      button.addEventListener("click", () => sendMessage(button.dataset.demoPrompt));
+    });
   }
 
   const canAttach = !isLive && (active.id === "general" || active.supportsImages);
@@ -1218,7 +1195,7 @@ function renderAgentModes() {
   els.briefBtn.innerHTML = icon("brief") + `<span>${active.id === "general" ? "Brief" : isLive ? "Ask live data" : "Run demo"}</span>`;
   els.input.placeholder = active.id === "general"
     ? `Ask about ${state.customer.name}...`
-    : isLive ? `Ask ${active.specialists.find((item) => item.id === state.liveSpecialist)?.name || "the live plant"}...` : `Talk to ${active.name}...`;
+    : isLive ? "Ask the shopfloor orchestrator..." : `Talk to ${active.name}...`;
   els.avatarIdleCopy.textContent = `Turn on voice to talk with the ${active.name}.`;
   els.roleplayBtn.disabled = isLive;
   els.roleplayBtn.title = isLive ? "Roleplay is unavailable for live operational data" : "Practice your pitch";
@@ -1239,6 +1216,7 @@ function selectAgentMode(modeId, options = {}) {
   state.roleplayActive = false;
   state.agentMode = mode.id;
   els.roleplayBanner.hidden = true;
+  els.agentModeDisclosure.open = false;
   clearAttachment();
   renderAgentModes();
   renderWelcome();
@@ -1263,24 +1241,22 @@ function renderWelcome() {
   intro.innerHTML = mode.id === "general"
     ? `ClientSphere is focused on <b>${escapeHtml(customer.name)}</b>. Ask a quick question and the adviser will expand only when you request it.`
     : mode.isLive
-      ? `<b>${escapeHtml(mode.name)}</b> queries the current Celyn Components demo plant through Microsoft Fabric. This is live demo telemetry, not ${escapeHtml(customer.name)} operational data.`
+      ? `<b>${escapeHtml(mode.name)}</b> sends every question through one Foundry orchestrator, which queries the Celyn Components demo plant through Microsoft Fabric. This is live demo telemetry, not ${escapeHtml(customer.name)} operational data.`
       : `<b>${escapeHtml(mode.name)}</b> is ready as a synthetic ${escapeHtml(customer.name)} demo. Choose a starter or attach an image where supported.`;
   const chips = document.createElement("div");
   chips.className = "chips";
   const starters = mode.id === "general"
     ? customer.topics.slice(0, 4).map((topic) => `Brief me on ${topic.toLowerCase()} for ${customer.name}, with dates and public sources.`)
-    : mode.isLive ? mode.specialists.map((specialist) => specialist.prompt) : (mode.demoScenes || []).map((scene) => scene.prompt);
+    : mode.isLive ? liveStarters(mode) : (mode.demoScenes || []).map((scene) => scene.prompt);
   starters.slice(0, 4).forEach((prompt, index) => {
+    const starterPrompt = mode.isLive ? prompt.prompt : prompt;
     const button = document.createElement("button");
     button.className = "chip";
     button.type = "button";
     button.textContent = mode.id === "general"
-      ? prompt
-      : mode.isLive ? `${mode.specialists[index].name} · ${prompt}` : `${mode.demoScenes[index].label} · ${mode.demoScenes[index].title}`;
-    button.addEventListener("click", () => {
-      if (mode.isLive) selectLiveSpecialist(mode.specialists[index].id, { announce: false, welcome: false });
-      sendMessage(prompt);
-    });
+      ? starterPrompt
+      : mode.isLive ? prompt.label : `${mode.demoScenes[index].label} · ${mode.demoScenes[index].title}`;
+    button.addEventListener("click", () => sendMessage(starterPrompt));
     chips.appendChild(button);
   });
   bubble.append(intro, chips);
@@ -1442,7 +1418,6 @@ function renderResources() {
         item.addEventListener("click", () => {
           openDrawer(false);
           if (l.agentMode) selectAgentMode(l.agentMode);
-          if (l.liveSpecialist) selectLiveSpecialist(l.liveSpecialist, { announce: false, welcome: false });
           dispatch(l.prompt, { userText: l.title });
         });
       }
@@ -1613,7 +1588,6 @@ async function init() {
   state.green = state.cfg.avatarGreen || state.green;
   els.tagline.textContent = state.cfg.tagline;
   try { state.responseMode = localStorage.getItem("clientsphere.responseMode") || "brief"; } catch {}
-  try { state.liveSpecialist = localStorage.getItem("clientsphere.liveSpecialist") || "factory-pulse"; } catch {}
   selectResponseMode(state.responseMode);
   renderCustomerOptions();
   let savedCustomer = null;
@@ -1649,6 +1623,7 @@ async function init() {
     const button = event.target.closest("[data-response-mode]");
     if (button) selectResponseMode(button.dataset.responseMode);
   });
+  els.agentModeSelect.addEventListener("change", () => selectAgentMode(els.agentModeSelect.value));
   els.attachBtn.addEventListener("click", () => els.imageInput.click());
   els.imageInput.addEventListener("change", () => selectImage(els.imageInput.files?.[0]));
   els.attachmentRemove.addEventListener("click", clearAttachment);
@@ -1680,8 +1655,7 @@ async function init() {
     if (mode.id === "general") {
       dispatch("[[CUSTOMER_BRIEF]] Build an evidence-led executive briefing for the active customer.", { userText: "Build customer brief", speak: false });
     } else if (mode.isLive) {
-      const specialist = mode.specialists.find((item) => item.id === state.liveSpecialist) || mode.specialists[0];
-      sendMessage(specialist.prompt);
+      sendMessage(liveStarters(mode)[0].prompt);
     } else {
       sendMessage(`Run a complete synthetic demonstration of the ${mode.name} workflow for ${state.customer.name}. Make the synthetic inputs, six workflow steps, human controls, business value, measures, and next proof point visible.`);
     }

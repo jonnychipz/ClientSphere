@@ -33,10 +33,10 @@ Use `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif` throughout. Product
 - Desktop: the existing two-pane Hubble-derived structure remains recognizable. The left pane is the customer/avatar stage; the right pane is the working conversation.
 - The active customer selector is part of the persistent header and is keyboard searchable.
 - The customer intelligence drawer contains overview, business, offerings, initiatives, financials, leadership, news, and sources.
-- The conversation header contains a persistent five-tile agent switcher: General Adviser, three synthetic use cases, then Manufacturing Shopfloor Live with four compact specialist lenses and sample questions.
+- The conversation header uses one compact experience dropdown for General Adviser, three synthetic use cases, and Manufacturing Shopfloor Live. A collapsed details disclosure keeps prompts, workflow, and provenance available without crowding the conversation.
 - A two-state response control sits beside the active mode: `Brief + voice` for concise avatar turns and `Structured` for detailed screen-first artefacts.
 - Synthetic modes expose three numbered scenes and a collapsible sample-data panel so the presenter can run a credible demo without typing, while the composer always remains available for free-text questions.
-- The live mode uses a green non-colour-only status treatment, names the Celyn Components demo plant, discloses that the data does not belong to the selected customer, and shows Microsoft Entra connection state in context.
+- The live mode exposes only the Foundry orchestrator. It automatically delegates to the four governed Fabric data specialists, while ClientSphere shows a green non-colour-only connection state, names the Celyn Components demo plant, and discloses that the data does not belong to the selected customer.
 - Tablet: preserve two panes while reducing stage controls.
 - Mobile: stack the customer stage above chat, keep the composer sticky, and move secondary controls into an inline disclosure.
 
