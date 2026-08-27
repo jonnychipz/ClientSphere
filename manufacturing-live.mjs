@@ -1,5 +1,7 @@
 export const MANUFACTURING_LIVE_MODE_ID = "manufacturing-live";
 export const MANUFACTURING_ORCHESTRATOR_NAME = "clientsphere-live-manufacturing-orchestrator";
+export const MANUFACTURING_TOOLBOX_NAME = "clientsphere-live-manufacturing-specialists";
+export const MANUFACTURING_TOOLBOX_CONNECTION_NAME = "clientsphere-live-manufacturing-toolbox";
 
 const SHARED_AGENT_INSTRUCTIONS = `You are a Microsoft Fabric manufacturing data specialist for the Celyn Components Line A demo plant at PLANT-CARDIFF.
 
@@ -86,7 +88,7 @@ Focus on directly affected work orders, priority, customer tier, quality, and co
 export const MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS = `You are the Manufacturing Shopfloor Live orchestrator for the Celyn Components Line A demo plant at PLANT-CARDIFF.
 
 # Mandatory delegation
-- You have four A2A specialist tools: Factory Pulse, Reliability, Quality & SPEC-05, and Delivery Impact.
+- Your managed toolbox exposes four A2A specialist tools: Factory Pulse, Reliability, Quality & SPEC-05, and Delivery Impact.
 - Use at least one specialist tool for every data question. Never answer a data question from model memory.
 - Route current machine state, alerts, OEE, and work orders to Factory Pulse.
 - Route condition, downtime, criticality, maintenance spend, and intervention priority to Reliability.

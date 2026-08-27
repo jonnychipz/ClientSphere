@@ -12,6 +12,7 @@ import { buildCustomerSyntheticUseCases, getGeneralModelDeployment } from "../us
 import {
   MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
   MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS,
+  MANUFACTURING_TOOLBOX_CONNECTION_NAME, MANUFACTURING_TOOLBOX_NAME,
 } from "../manufacturing-live.mjs";
 import { FETCH_DOC_TOOL } from "../webgrounding.mjs";
 
@@ -258,6 +259,39 @@ async function ensureA2AConnection(specialist) {
   return project.connections.get(specialist.a2aConnectionName);
 }
 
+async function ensureToolboxConnection(toolboxUrl) {
+  const access = await credential.getToken("https://management.azure.com/.default");
+  const response = await fetch(
+    `https://management.azure.com${projectResourceId}/connections/${MANUFACTURING_TOOLBOX_CONNECTION_NAME}?api-version=2025-04-01-preview`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${access.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: MANUFACTURING_TOOLBOX_CONNECTION_NAME,
+        type: "Microsoft.MachineLearningServices/workspaces/connections",
+        properties: {
+          authType: "UserEntraToken",
+          group: "ServicesAndApps",
+          category: "RemoteTool",
+          target: toolboxUrl,
+          audience: "https://ai.azure.com",
+          isSharedToAll: true,
+          sharedUserList: [],
+          Credentials: {},
+          metadata: { ApiType: "Azure" },
+        },
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Could not create manufacturing toolbox connection: ${response.status} ${await response.text()}`);
+  }
+  return project.connections.get(MANUFACTURING_TOOLBOX_CONNECTION_NAME);
+}
+
 async function cleanupStores(previousStoreIds, currentStoreId) {
   for (const previousStoreId of new Set(previousStoreIds || [])) {
     if (!previousStoreId || previousStoreId === currentStoreId) continue;
@@ -411,6 +445,22 @@ if (missingLiveConnections.length) {
     console.log(`  ${specialist.name}: ${agent.versions.latest.id}`);
   }
 
+  const toolbox = await project.toolboxes.createVersion(
+    MANUFACTURING_TOOLBOX_NAME,
+    MANUFACTURING_SPECIALISTS.map((specialist, index) => ({
+      ...a2aTools[index],
+      name: specialist.id.replaceAll("-", "_"),
+      description: specialist.summary,
+    })),
+    {
+      description: "Four user-authorized A2A specialists for the ClientSphere live manufacturing orchestrator.",
+      metadata: { clientsphereManaged: "true" },
+    },
+  );
+  await project.toolboxes.update(MANUFACTURING_TOOLBOX_NAME, toolbox.version);
+  const toolboxUrl = `${endpoint}/toolboxes/${MANUFACTURING_TOOLBOX_NAME}/mcp?api-version=v1`;
+  const toolboxConnection = await ensureToolboxConnection(toolboxUrl);
+
   const orchestrator = await upsertAgent({
     customerId: "shared-manufacturing",
     name: MANUFACTURING_ORCHESTRATOR_NAME,
@@ -418,7 +468,13 @@ if (missingLiveConnections.length) {
     instructions: MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
     modelDeployment: generalModel,
     mode: MANUFACTURING_LIVE_MODE_ID,
-    tools: a2aTools,
+    tools: [{
+      type: "mcp",
+      server_label: "manufacturing_specialists",
+      server_url: toolboxUrl,
+      require_approval: "never",
+      project_connection_id: toolboxConnection.id,
+    }],
     extraMetadata: { clientsphereRole: "orchestrator" },
   });
   metadata.liveManufacturing = {
@@ -429,6 +485,10 @@ if (missingLiveConnections.length) {
       agentId: orchestrator.versions.latest.id,
       model: generalModel,
       toolCount: a2aTools.length,
+      toolboxName: MANUFACTURING_TOOLBOX_NAME,
+      toolboxVersion: toolbox.version,
+      toolboxConnectionName: MANUFACTURING_TOOLBOX_CONNECTION_NAME,
+      toolboxConnectionId: toolboxConnection.id,
     },
     agents: liveAgents,
   };

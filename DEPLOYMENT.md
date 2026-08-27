@@ -39,7 +39,7 @@ With suffix `<suffix>`, `infra/main.bicep` creates:
 | Application Insights | `appi-clientsphere-<suffix>` |
 | Log Analytics | `log-clientsphere-<suffix>` |
 
-The Container App uses its system-assigned managed identity for existing Foundry agents, Speech, private image pulls, and access-state persistence. The live Fabric mode separately uses a short-lived delegated Microsoft Entra user token because the native Foundry Fabric Data Agent tool does not support application-only managed identity authentication.
+The Container App uses its system-assigned managed identity for existing Foundry agents, Speech, private image pulls, and access-state persistence. The live Fabric mode separately uses a short-lived delegated Microsoft Entra user token because the native Foundry Fabric Data Agent tool does not support application-only managed identity authentication. The orchestrator consumes a managed Foundry toolbox whose four tools are the A2A specialist connections, following the supported user-token passthrough pattern for nested Foundry tools.
 
 ```mermaid
 flowchart TD
