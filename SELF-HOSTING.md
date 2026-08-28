@@ -355,7 +355,7 @@ The base application deploys without Fabric or Entra configuration. Until this s
 
    A completed live deployment reports `liveFabricAgentsConfigured: 4`, `liveOrchestratorConfigured: true`, and `fabricAuthConfigured: true`.
 
-The browser then shows **CONNECT TO FABRIC**. After the user signs in, it changes to **LIVE · Microsoft Entra** with their identity and token expiry. Live questions go only to the shared orchestrator, which selects the four direct Fabric Data Agent MCP tools under that user's Fabric permissions.
+The browser then shows **CONNECT TO FABRIC**. After the user signs in, it changes to **LIVE · Microsoft Entra** with their identity and token expiry. Live questions go only to the shared orchestrator, which selects the four direct Fabric Data Agent MCP tools under that user's Fabric permissions. The browser supplies its IANA time zone, and a deterministic server-side formatter converts Fabric UTC timestamps with the date-appropriate daylight-saving offset before the orchestrator displays them.
 
 ## 8. Become the administrator and onboard users
 

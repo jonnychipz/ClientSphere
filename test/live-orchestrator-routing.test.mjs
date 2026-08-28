@@ -13,6 +13,8 @@ test("live chat is wired only to the Foundry orchestrator", () => {
   );
   assert.match(serverSource, /agentContext = isLiveFabric \? "orchestrator" : ""/);
   assert.match(serverSource, /toolChoice: isLiveFabric \? "required" : undefined/);
+  assert.match(serverSource, /buildUserTimeContext\(userTimeZone\)/);
+  assert.match(serverSource, /formatUserTimestamps\(call\.arguments, options\.userTimeZone\)/);
   assert.match(serverSource, /FABRIC_CAPACITY_EXCEEDED/);
   assert.match(serverSource, /FABRIC_TOOL_TIMEOUT/);
   assert.doesNotMatch(serverSource, /liveSpecialist|CLIENTSPHERE_SPECIALIST_LENS/);
@@ -23,10 +25,12 @@ test("browser does not expose or send specialist selection", () => {
   assert.match(browserSource, /Ask the shopfloor orchestrator/);
   assert.match(browserSource, /orchestrator selects and combines the underlying Fabric Data Agents/);
   assert.match(browserSource, /mode\.isLive \? "structured" : preferred/);
+  assert.match(browserSource, /userTimeZone: userTimeZone\(\)/);
 });
 
 test("orchestrator uses direct Fabric MCP tools rather than the A2A toolbox", () => {
-  assert.match(provisionSource, /tools: directFabricTools/);
+  assert.match(provisionSource, /tools: liveOrchestratorTools/);
+  assert.match(provisionSource, /buildUserTimestampTool\(\)/);
   assert.match(provisionSource, /server_label: specialist\.mcpServerLabel/);
   assert.match(provisionSource, /clientsphereArchitecture: "direct-fabric-mcp"/);
   assert.doesNotMatch(provisionSource, /server_label: "manufacturing_specialists"/);

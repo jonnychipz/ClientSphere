@@ -21,6 +21,9 @@ import { createThreadToken, verifyThreadToken } from "./thread-token.mjs";
 import { buildAgentInput } from "./multimodal-input.mjs";
 import { renderAgentResponse } from "./response-rendering.mjs";
 import {
+  FORMAT_USER_TIMESTAMPS_TOOL, buildUserTimeContext, formatUserTimestamps,
+} from "./time-zone.mjs";
+import {
   DEV_MODE, OAUTH_CONFIGURED, ADMIN_LOGINS, sessionLogin, setSession, clearSession,
   makeState, setStateCookie, checkState, authorizeUrl, exchangeCode, fetchGitHubUser,
 } from "./auth.mjs";
@@ -978,6 +981,8 @@ async function runAgent(previousResponseId, agentName, customer, input, options 
       let output = `Error: unknown tool '${call.name}'.`;
       if (call.name === FETCH_DOC_TOOL.name) {
         output = await fetchOfficialDoc(call.arguments, customer);
+      } else if (call.name === FORMAT_USER_TIMESTAMPS_TOOL.name) {
+        output = formatUserTimestamps(call.arguments, options.userTimeZone);
       }
       outputs.push({
         type: "function_call_output",
@@ -996,7 +1001,7 @@ async function runAgent(previousResponseId, agentName, customer, input, options 
 app.post("/api/chat", requireApproved(async (req, res) => {
   const {
     message, threadId, customerId, agentMode = "general", responseMode = "brief",
-    attachments,
+    attachments, userTimeZone,
   } = req.body || {};
   if (!message || !message.trim()) return res.status(400).json({ error: "message required" });
   if (!["brief", "structured"].includes(responseMode)) return res.status(400).json({ error: "valid responseMode required" });
@@ -1027,7 +1032,9 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     const customerContext = isLiveFabric
       ? `\n[[CLIENTSPHERE_CONTEXT: The active customer is ${customer.name}. The Fabric data belongs to the Celyn Components demo plant, not ${customer.name}.]]`
       : "";
-    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]${customerContext}\n${message.trim()}`;
+    const userTimeContext = isLiveFabric ? buildUserTimeContext(userTimeZone) : null;
+    const timeContext = userTimeContext ? `\n${userTimeContext.marker}` : "";
+    const controlledMessage = `[[RESPONSE_MODE:${responseMode.toUpperCase()}]]${customerContext}${timeContext}\n${message.trim()}`;
     const input = buildAgentInput(controlledMessage, attachments);
     const agentContext = isLiveFabric ? "orchestrator" : "";
     let previousResponseId = null;
@@ -1057,6 +1064,7 @@ app.post("/api/chat", requireApproved(async (req, res) => {
       {
         openAIClient: delegatedOpenAI,
         toolChoice: isLiveFabric ? "required" : undefined,
+        userTimeZone: userTimeContext?.timeZone,
       },
     );
     if (response.status !== "completed") {

@@ -47,6 +47,8 @@ test("live orchestrator owns specialist routing", () => {
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /at most two tools for a cross-domain question/i);
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Markdown table with one row per known Line A machine/i);
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Distinguish "no matching rows" from "not authorized."/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /call format_user_timestamps once with every source timestamp/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /including the IANA zone and explicit UTC offset/i);
   assert.doesNotMatch(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /preferred specialist lens/i);
 });
 

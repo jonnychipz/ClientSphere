@@ -10,6 +10,7 @@ import { customers } from "../customer-registry.mjs";
 import { buildCustomerInstructions, buildUseCaseInstructions, BASE_INSTRUCTIONS } from "../instructions.mjs";
 import { buildCustomerSyntheticUseCases, getGeneralModelDeployment } from "../use-case-registry.mjs";
 import { buildCustomerAgentTools } from "../agent-tooling.mjs";
+import { buildUserTimestampTool } from "../time-zone.mjs";
 import {
   MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
   MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS,
@@ -352,6 +353,7 @@ if (!hasEveryLiveBinding) {
     };
     console.log(`  ${specialist.name}: ${binding.artifactId}`);
   }
+  const liveOrchestratorTools = [...directFabricTools, buildUserTimestampTool()];
 
   const orchestrator = await upsertAgent({
     customerId: "shared-manufacturing",
@@ -360,7 +362,7 @@ if (!hasEveryLiveBinding) {
     instructions: MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
     modelDeployment: generalModel,
     mode: MANUFACTURING_LIVE_MODE_ID,
-    tools: directFabricTools,
+    tools: liveOrchestratorTools,
     extraMetadata: {
       clientsphereRole: "orchestrator",
       clientsphereArchitecture: "direct-fabric-mcp",
@@ -374,7 +376,8 @@ if (!hasEveryLiveBinding) {
       agentVersion: orchestrator.versions.latest.version,
       agentId: orchestrator.versions.latest.id,
       model: generalModel,
-      toolCount: directFabricTools.length,
+      toolCount: liveOrchestratorTools.length,
+      dataAgentToolCount: directFabricTools.length,
     },
     agents: liveAgents,
   };

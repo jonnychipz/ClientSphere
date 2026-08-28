@@ -31,7 +31,7 @@ The AI-assisted prompt tells the agent to:
 - Ask for concise, evidence-led public intelligence with Foundry Web Search for current customer-relevant information.
 - Open a structured customer brief with sources and dates.
 - Run three synthetic, sector-specific agent workflows per customer.
-- Query a governed live Fabric demo through one orchestrator and four domain specialists.
+- Query a governed live Fabric demo through one orchestrator and four domain specialists, with source timestamps converted to each user's browser time zone and labelled with the applicable UTC offset.
 - Upload a bounded image to supported multimodal demonstrations.
 - Rehearse customer conversations with roleplay and coaching.
 - Use Azure Speech voices and real-time avatars.

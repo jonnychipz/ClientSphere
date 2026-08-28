@@ -178,6 +178,9 @@ function escapeHtml(s) {
 function escapeXml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
 }
+function userTimeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
 // Turn bare URLs and **bold** into safe HTML (input is already escaped).
 function formatRich(escaped) {
   let html = escaped.replace(/\n/g, "<br>");
@@ -302,6 +305,7 @@ async function runChat(prompt, opts = {}) {
         customerId: state.customer?.id,
         agentMode: state.agentMode,
         responseMode: state.responseMode,
+        userTimeZone: userTimeZone(),
         attachments: opts.attachment ? [opts.attachment] : [],
       }),
     });
