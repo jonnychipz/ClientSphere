@@ -230,11 +230,10 @@ async function ensureA2AConnection(specialist) {
           group: "ServicesAndApps",
           category: "RemoteA2A",
           target,
-          audience: "https://ai.azure.com",
           isSharedToAll: true,
           sharedUserList: [],
           Credentials: {},
-          metadata: { ApiType: "Azure" },
+          metadata: { ApiType: "Azure", audience: "https://ai.azure.com" },
         },
       }),
     },
@@ -263,11 +262,10 @@ async function ensureToolboxConnection(toolboxUrl) {
           group: "ServicesAndApps",
           category: "RemoteTool",
           target: toolboxUrl,
-          audience: "https://ai.azure.com",
           isSharedToAll: true,
           sharedUserList: [],
           Credentials: {},
-          metadata: { ApiType: "Azure" },
+          metadata: { ApiType: "Azure", audience: "https://ai.azure.com" },
         },
       }),
     },
@@ -276,6 +274,56 @@ async function ensureToolboxConnection(toolboxUrl) {
     throw new Error(`Could not create manufacturing toolbox connection: ${response.status} ${await response.text()}`);
   }
   return project.connections.get(MANUFACTURING_TOOLBOX_CONNECTION_NAME);
+}
+
+async function ensureFabricMcpConnection(specialist) {
+    const workspaceId = (process.env.FABRIC_WORKSPACE_ID || "").trim();
+    const artifactId = (process.env[specialist.fabricAgentIdVariable] || "").trim();
+    if (!workspaceId || !artifactId) {
+      throw new Error(
+        `Both FABRIC_WORKSPACE_ID and ${specialist.fabricAgentIdVariable} are required to configure ${specialist.name}.`,
+      );
+    }
+    const guidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+    if (!guidPattern.test(workspaceId) || !guidPattern.test(artifactId)) {
+      throw new Error(`Fabric workspace and Data Agent IDs for ${specialist.name} must be valid GUIDs.`);
+    }
+    const fabricApi = "https://api.fabric.microsoft.com";
+    const serverUrl = `${fabricApi}/v1/mcp/workspaces/${workspaceId}/dataagents/${artifactId}/agent`;
+    const access = await credential.getToken("https://management.azure.com/.default");
+    const response = await fetch(
+      `https://management.azure.com${projectResourceId}/connections/${specialist.mcpConnectionName}?api-version=2025-04-01-preview`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + access.token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: specialist.mcpConnectionName,
+          type: "Microsoft.MachineLearningServices/workspaces/connections",
+          properties: {
+            authType: "UserEntraToken",
+            group: "ServicesAndApps",
+            category: "RemoteTool",
+            target: serverUrl,
+            audience: fabricApi,
+            isSharedToAll: true,
+            sharedUserList: [],
+            Credentials: {},
+            metadata: { ApiType: "Azure", type: "generic_mcp", audience: fabricApi },
+          },
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Could not reconcile Fabric MCP connection for ${specialist.name}: ${response.status} ${await response.text()}`);
+    }
+    return {
+      artifactId,
+      serverUrl,
+      connection: await project.connections.get(specialist.mcpConnectionName),
+    };
 }
 
 async function cleanupStores(previousStoreIds, currentStoreId) {
@@ -366,115 +414,64 @@ for (const customer of customers) {
   };
 }
 
-console.log("Checking shared live manufacturing connections...");
-const liveConnections = new Map();
-const missingLiveConnections = [];
-for (const specialist of MANUFACTURING_SPECIALISTS) {
-  try {
-    const connection = await project.connections.get(specialist.connectionName);
-    if (!connection?.id) {
-      throw new Error(`Foundry connection '${specialist.connectionName}' has no resource ID.`);
-    }
-    liveConnections.set(specialist.connectionName, connection);
-  } catch (error) {
-    const missing = error.statusCode === 404 ||
-      error.status === 404 ||
-      /not found|does not exist/i.test(error.message || "");
-    if (!missing) {
-      throw new Error(`Could not read Foundry connection '${specialist.connectionName}': ${error.message}`);
-    }
-    missingLiveConnections.push(specialist.connectionName);
-  }
+const workspaceId = (process.env.FABRIC_WORKSPACE_ID || "").trim();
+const configuredArtifactIds = MANUFACTURING_SPECIALISTS
+  .map((specialist) => (process.env[specialist.fabricAgentIdVariable] || "").trim());
+const hasAnyLiveBinding = Boolean(workspaceId || configuredArtifactIds.some(Boolean));
+const hasEveryLiveBinding = Boolean(workspaceId && configuredArtifactIds.every(Boolean));
+
+if (hasAnyLiveBinding && !hasEveryLiveBinding) {
+  throw new Error("Live Fabric configuration is incomplete. Set FABRIC_WORKSPACE_ID and all four FABRIC_*_AGENT_ID values.");
 }
 
-if (missingLiveConnections.length) {
-  console.warn(
-    `Live Fabric agent provisioning skipped; create these Foundry Microsoft Fabric connections and rerun with refresh enabled: ${missingLiveConnections.join(", ")}.`,
-  );
+if (!hasEveryLiveBinding) {
+  console.warn("Live Fabric agent provisioning skipped; no complete direct Data Agent MCP configuration was supplied.");
 } else {
-  console.log("Provisioning shared live manufacturing specialists...");
+  console.log("Provisioning direct live Fabric Data Agent MCP tools...");
   const liveAgents = {};
-  const a2aTools = [];
+  const directFabricTools = [];
   for (const specialist of MANUFACTURING_SPECIALISTS) {
-    const connection = liveConnections.get(specialist.connectionName);
-    const agent = await upsertAgent({
-      customerId: "shared-manufacturing",
-      name: specialist.agentName,
-      description: specialist.description,
-      instructions: specialist.instructions,
-      modelDeployment: generalModel,
-      mode: MANUFACTURING_LIVE_MODE_ID,
-      tools: [{
-        type: "fabric_dataagent_preview",
-        fabric_dataagent_preview: {
-          project_connections: [{ project_connection_id: connection.id }],
-        },
-      }],
-      extraMetadata: { clientsphereSpecialist: specialist.id },
+    const binding = await ensureFabricMcpConnection(specialist);
+    directFabricTools.push({
+      type: "mcp",
+      server_label: specialist.mcpServerLabel,
+      server_url: binding.serverUrl,
+      require_approval: "never",
+      project_connection_id: binding.connection.id,
     });
     liveAgents[specialist.id] = {
-      agentName: specialist.agentName,
-      agentVersion: agent.versions.latest.version,
-      agentId: agent.versions.latest.id,
-      model: generalModel,
-      connectionName: specialist.connectionName,
-      connectionId: connection.id,
+      name: specialist.name,
+      fabricAgentId: binding.artifactId,
+      workspaceId,
+      serverLabel: specialist.mcpServerLabel,
+      mcpConnectionName: specialist.mcpConnectionName,
+      mcpConnectionId: binding.connection.id,
     };
-    await enableIncomingA2A(specialist);
-    const a2aConnection = await ensureA2AConnection(specialist);
-    a2aTools.push({
-      type: "a2a_preview",
-      project_connection_id: a2aConnection.id,
-    });
-    liveAgents[specialist.id].a2aConnectionName = specialist.a2aConnectionName;
-    liveAgents[specialist.id].a2aConnectionId = a2aConnection.id;
-    console.log(`  ${specialist.name}: ${agent.versions.latest.id}`);
+    console.log(`  ${specialist.name}: ${binding.artifactId}`);
   }
-
-  const toolbox = await project.toolboxes.createVersion(
-    MANUFACTURING_TOOLBOX_NAME,
-    MANUFACTURING_SPECIALISTS.map((specialist, index) => ({
-      ...a2aTools[index],
-      name: specialist.id.replaceAll("-", "_"),
-      description: specialist.summary,
-    })),
-    {
-      description: "Four user-authorized A2A specialists for the ClientSphere live manufacturing orchestrator.",
-      metadata: { clientsphereManaged: "true" },
-    },
-  );
-  await project.toolboxes.update(MANUFACTURING_TOOLBOX_NAME, toolbox.version);
-  const toolboxUrl = `${endpoint}/toolboxes/${MANUFACTURING_TOOLBOX_NAME}/mcp?api-version=v1`;
-  const toolboxConnection = await ensureToolboxConnection(toolboxUrl);
 
   const orchestrator = await upsertAgent({
     customerId: "shared-manufacturing",
     name: MANUFACTURING_ORCHESTRATOR_NAME,
-    description: "Routes one ClientSphere live conversation across four Foundry specialists backed by four Fabric Data Agents.",
+    description: "Routes one ClientSphere live conversation directly across four published Fabric Data Agents.",
     instructions: MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
     modelDeployment: generalModel,
     mode: MANUFACTURING_LIVE_MODE_ID,
-    tools: [{
-      type: "mcp",
-      server_label: "manufacturing_specialists",
-      server_url: toolboxUrl,
-      require_approval: "never",
-      project_connection_id: toolboxConnection.id,
-    }],
-    extraMetadata: { clientsphereRole: "orchestrator" },
+    tools: directFabricTools,
+    extraMetadata: {
+      clientsphereRole: "orchestrator",
+      clientsphereArchitecture: "direct-fabric-mcp",
+    },
   });
   metadata.liveManufacturing = {
     modeId: MANUFACTURING_LIVE_MODE_ID,
+    architecture: "direct-fabric-mcp",
     orchestrator: {
       agentName: MANUFACTURING_ORCHESTRATOR_NAME,
       agentVersion: orchestrator.versions.latest.version,
       agentId: orchestrator.versions.latest.id,
       model: generalModel,
-      toolCount: a2aTools.length,
-      toolboxName: MANUFACTURING_TOOLBOX_NAME,
-      toolboxVersion: toolbox.version,
-      toolboxConnectionName: MANUFACTURING_TOOLBOX_CONNECTION_NAME,
-      toolboxConnectionId: toolboxConnection.id,
+      toolCount: directFabricTools.length,
     },
     agents: liveAgents,
   };

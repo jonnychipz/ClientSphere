@@ -39,7 +39,7 @@ With suffix `<suffix>`, `infra/main.bicep` creates:
 | Application Insights | `appi-clientsphere-<suffix>` |
 | Log Analytics | `log-clientsphere-<suffix>` |
 
-The Container App uses its system-assigned managed identity for existing Foundry agents, Speech, private image pulls, and access-state persistence. The live Fabric mode separately uses a short-lived delegated Microsoft Entra user token because the native Foundry Fabric Data Agent tool does not support application-only managed identity authentication. The orchestrator consumes a managed Foundry toolbox whose four tools are the A2A specialist connections, following the supported user-token passthrough pattern for nested Foundry tools.
+The Container App uses its system-assigned managed identity for existing Foundry agents, Speech, private image pulls, and access-state persistence. The live Fabric mode separately uses a short-lived delegated Microsoft Entra user token because Fabric Data Agents do not support application-only authentication. The orchestrator calls four published Fabric Data Agent MCP endpoints directly through user-token-passthrough project connections, avoiding extra A2A and nested-toolbox latency.
 
 ```mermaid
 flowchart TD
@@ -104,7 +104,7 @@ Required secret:
 SESSION_SECRET
 ```
 
-The live Fabric mode additionally requires repository variable `ENTRA_CLIENT_ID`, secret `ENTRA_CLIENT_SECRET`, the four named Microsoft Fabric project connections, and **Foundry Agent Consumer** on the project for every delegated user or user group. Run `scripts/configure-live-fabric.ps1` after the base application and connections exist; it stores the identity values securely and dispatches a full agent refresh.
+The live Fabric mode additionally requires repository variable `ENTRA_CLIENT_ID`, secret `ENTRA_CLIENT_SECRET`, `FABRIC_WORKSPACE_ID`, all four `FABRIC_*_AGENT_ID` variables, and **Foundry Agent Consumer** on the project for every delegated user or user group. Run `scripts/configure-live-fabric.ps1` after the base application and Fabric Data Agents exist; it stores the identity and item values securely and dispatches a full agent refresh.
 
 OAuth secrets:
 
@@ -116,6 +116,8 @@ GH_OAUTH_CLIENT_SECRET
 Optional email values are documented in [EMAIL-WORKFLOW.md](EMAIL-WORKFLOW.md).
 
 Optional custom avatar/voice repository variables are managed by `scripts/configure-custom-avatar.ps1` and applied as Container App environment values by Bicep. They remain disabled by default; see [custom-avatar/README.md](custom-avatar/README.md).
+
+The optional live Manufacturing Fabric mode uses five repository variables: `FABRIC_WORKSPACE_ID` plus one current Data Agent ID for Factory Pulse, Reliability, Quality, and Delivery Impact. Agent provisioning creates or reconciles four `RemoteTool` MCP connections directly to those published Data Agent endpoints on every agent refresh; no manually created Microsoft Fabric connection, A2A wrapper, or nested toolbox is required.
 
 ## Foundry Web Search
 

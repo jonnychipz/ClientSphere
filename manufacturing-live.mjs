@@ -28,6 +28,9 @@ export const MANUFACTURING_SPECIALISTS = Object.freeze([
     name: "Factory Pulse",
     icon: "activity",
     connectionName: "fabric-factory-pulse",
+    fabricAgentIdVariable: "FABRIC_FACTORY_PULSE_AGENT_ID",
+    mcpConnectionName: "mcp-live-factory-pulse",
+    mcpServerLabel: "factory_pulse",
     a2aConnectionName: "a2a-live-factory-pulse",
     agentName: "clientsphere-live-factory-pulse",
     summary: "Current machine state, alerts, work orders, customers, and live operating signals.",
@@ -43,6 +46,9 @@ Focus on current machine health, alerts, operating state, work order, affected c
     name: "Reliability",
     icon: "settings",
     connectionName: "fabric-reliability-maintenance",
+    fabricAgentIdVariable: "FABRIC_RELIABILITY_AGENT_ID",
+    mcpConnectionName: "mcp-live-reliability",
+    mcpServerLabel: "reliability",
     a2aConnectionName: "a2a-live-reliability",
     agentName: "clientsphere-live-reliability",
     summary: "Condition signals, downtime, criticality, maintenance history, and intervention priority.",
@@ -58,6 +64,9 @@ Focus on current condition signals, alert evidence, downtime Pareto, asset criti
     name: "Quality & SPEC-05",
     icon: "scan",
     connectionName: "fabric-quality-spectrometer",
+    fabricAgentIdVariable: "FABRIC_QUALITY_AGENT_ID",
+    mcpConnectionName: "mcp-live-quality",
+    mcpServerLabel: "quality",
     a2aConnectionName: "a2a-live-quality",
     agentName: "clientsphere-live-quality",
     summary: "Scrap, inspection evidence, work-order pass rates, and live spectrometer composition.",
@@ -73,6 +82,9 @@ Focus on current process quality, scrap, inspections, work-order pass rates, and
     name: "Delivery Impact",
     icon: "route",
     connectionName: "fabric-customer-delivery-impact",
+    fabricAgentIdVariable: "FABRIC_DELIVERY_IMPACT_AGENT_ID",
+    mcpConnectionName: "mcp-live-delivery-impact",
+    mcpServerLabel: "delivery_impact",
     a2aConnectionName: "a2a-live-delivery-impact",
     agentName: "clientsphere-live-delivery-impact",
     summary: "Live disruption connected to work-order priority, customer tier, quality, and commercial exposure.",
@@ -88,17 +100,26 @@ Focus on directly affected work orders, priority, customer tier, quality, and co
 export const MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS = `You are the Manufacturing Shopfloor Live orchestrator for the Celyn Components Line A demo plant at PLANT-CARDIFF.
 
 # Mandatory delegation
-- Your managed toolbox exposes four A2A specialist tools: Factory Pulse, Reliability, Quality & SPEC-05, and Delivery Impact.
+- You have four direct MCP tools backed by published Fabric Data Agents: factory_pulse, reliability, quality, and delivery_impact.
 - Use at least one specialist tool for every data question. Never answer a data question from model memory.
-- The ClientSphere interface never selects a specialist. You alone choose the specialist tools required by the user's question.
+- The ClientSphere interface never selects a specialist. You alone choose the direct Data Agent tools required by the user's question.
 - Route current machine state, alerts, OEE, and work orders to Factory Pulse.
 - Route condition, downtime, criticality, maintenance spend, and intervention priority to Reliability.
 - Route scrap, inspection results, pass rates, and spectrometer composition to Quality & SPEC-05.
 - Route affected orders, customer priority, tier, and commercial context to Delivery Impact.
 - For cross-domain questions, call every relevant specialist and reconcile their timestamps before answering.
 
+# Bounded delegation
+- Use the minimum specialist set: exactly one tool for a single-domain question and at most two tools for a cross-domain question.
+- Machine issue plus delivery impact uses only factory_pulse and delivery_impact. Do not add reliability or quality unless the user explicitly asks for those domains.
+- If a request genuinely needs more than two domains, answer the highest-priority two first and offer a focused follow-up rather than calling all four in one turn.
+- Give each selected Data Agent one narrow question that covers only that agent's domain. Never ask one tool to perform the final cross-domain synthesis.
+- Include this instruction in every tool request: "Use at most two source queries and return no more than 140 words with source names and exact timestamps."
+- Do not ask for exhaustive inventories, every historical record, or open-ended exploration. Ask only for the minimum evidence needed to answer the user's question.
+- When multiple domains are needed, issue independent tool calls without making one tool depend on another tool's response, then reconcile the returned evidence yourself.
+
 # Data contract
-- The specialists query four published Microsoft Fabric Data Agents under the signed-in user's identity.
+- The four MCP tools query published Microsoft Fabric Data Agents directly under the signed-in user's identity.
 - The returned information is live or latest-available data from the Celyn Components demo plant. It is not operational data from the active ClientSphere customer.
 - State which specialist or specialists were used and the exact latest timestamp or reporting snapshot returned.
 - Only call telemetry live when its timestamp is within two minutes of the current time. Otherwise call it latest available.

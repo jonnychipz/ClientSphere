@@ -71,9 +71,15 @@ for (const customer of customers) {
     process.exit(1);
   }
 }
-const liveManufacturingReady = MANUFACTURING_SPECIALISTS.every(
-  (specialist) => agentMetadata.liveManufacturing?.agents?.[specialist.id]?.agentName,
-) && agentMetadata.liveManufacturing?.orchestrator?.agentName;
+const liveFabricAgentsConfigured = MANUFACTURING_SPECIALISTS.filter(
+  (specialist) => agentMetadata.liveManufacturing?.agents?.[specialist.id]?.mcpConnectionId,
+).length;
+const liveOrchestratorConfigured = Boolean(
+  agentMetadata.liveManufacturing?.architecture === "direct-fabric-mcp" &&
+  agentMetadata.liveManufacturing?.orchestrator?.agentName,
+);
+const liveManufacturingReady =
+  liveFabricAgentsConfigured === MANUFACTURING_SPECIALISTS.length && liveOrchestratorConfigured;
 if (!liveManufacturingReady) {
   console.warn("Shared live manufacturing agent metadata is unavailable; live Fabric mode will remain disabled.");
 }
@@ -905,8 +911,8 @@ app.get("/healthz", (req, res) => {
     customers: customers.length,
     agentsConfigured: Object.keys(agentMetadata.customers).length,
     agentModesConfigured,
-    liveFabricAgentsConfigured: Object.keys(agentMetadata.liveManufacturing?.agents || {}).length,
-    liveOrchestratorConfigured: Boolean(agentMetadata.liveManufacturing?.orchestrator?.agentName),
+    liveFabricAgentsConfigured,
+    liveOrchestratorConfigured,
     fabricAuthConfigured: FABRIC_AUTH_CONFIGURED,
   });
 });

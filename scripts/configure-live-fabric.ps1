@@ -4,6 +4,12 @@ param(
 
   [Security.SecureString]$ClientSecret,
 
+  [string]$WorkspaceId,
+  [string]$FactoryPulseAgentId,
+  [string]$ReliabilityAgentId,
+  [string]$QualityAgentId,
+  [string]$DeliveryImpactAgentId,
+
   [string]$Repository
 )
 
@@ -51,33 +57,36 @@ if (-not $fqdn) {
 }
 $redirectUri = "https://$fqdn/auth/fabric/callback"
 
-$projectId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.CognitiveServices/accounts/clientsphere-ai-$suffix/projects/clientsphere-project"
-$requiredConnections = @(
-  "fabric-factory-pulse",
-  "fabric-reliability-maintenance",
-  "fabric-quality-spectrometer",
-  "fabric-customer-delivery-impact"
-)
-$missingConnections = @()
-foreach ($connectionName in $requiredConnections) {
-  try {
-    az rest `
-      --method GET `
-      --url "https://management.azure.com$projectId/connections/$connectionName`?api-version=2025-04-01-preview" `
-      --output none 2>$null
-  } catch {
-    $missingConnections += $connectionName
+function Resolve-GuidSetting([string]$Value, [string]$VariableName, [string]$Prompt) {
+  if (-not $Value) {
+    $Value = Get-RepositoryVariable $VariableName
   }
+  if (-not $Value) {
+    $Value = (Read-Host $Prompt).Trim()
+  }
+  if ($Value -notmatch "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$") {
+    throw "$VariableName must be a valid GUID."
+  }
+  return $Value
 }
-if ($missingConnections.Count -gt 0) {
-  throw "Create the required Microsoft Fabric project connections in Foundry before continuing: $($missingConnections -join ', ')."
-}
+
+$WorkspaceId = Resolve-GuidSetting $WorkspaceId "FABRIC_WORKSPACE_ID" "Fabric workspace ID"
+$FactoryPulseAgentId = Resolve-GuidSetting $FactoryPulseAgentId "FABRIC_FACTORY_PULSE_AGENT_ID" "Factory Pulse Data Agent ID"
+$ReliabilityAgentId = Resolve-GuidSetting $ReliabilityAgentId "FABRIC_RELIABILITY_AGENT_ID" "Reliability Data Agent ID"
+$QualityAgentId = Resolve-GuidSetting $QualityAgentId "FABRIC_QUALITY_AGENT_ID" "Quality Data Agent ID"
+$DeliveryImpactAgentId = Resolve-GuidSetting $DeliveryImpactAgentId "FABRIC_DELIVERY_IMPACT_AGENT_ID" "Delivery Impact Data Agent ID"
+
+gh variable set FABRIC_WORKSPACE_ID --repo $Repository --body $WorkspaceId
+gh variable set FABRIC_FACTORY_PULSE_AGENT_ID --repo $Repository --body $FactoryPulseAgentId
+gh variable set FABRIC_RELIABILITY_AGENT_ID --repo $Repository --body $ReliabilityAgentId
+gh variable set FABRIC_QUALITY_AGENT_ID --repo $Repository --body $QualityAgentId
+gh variable set FABRIC_DELIVERY_IMPACT_AGENT_ID --repo $Repository --body $DeliveryImpactAgentId
 
 Write-Output "Microsoft Entra redirect URI: $redirectUri"
 if (-not $ClientId) {
   $ClientId = (Read-Host "Microsoft Entra application (client) ID").Trim()
 }
-if ($ClientId -notmatch "^[0-9a-fA-F-]{36}$") {
+if ($ClientId -notmatch "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$") {
   throw "A valid Microsoft Entra application client ID is required."
 }
 if (-not $ClientSecret) {
@@ -101,4 +110,4 @@ try {
 
 gh workflow run deploy.yml --repo $Repository --ref main -f refresh_customer_agents=true
 
-Write-Output "Live Fabric identity saved and a full agent refresh started."
+Write-Output "Live Fabric identity and direct Data Agent bindings saved; a full agent refresh started."

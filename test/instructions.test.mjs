@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildCustomerInstructions, buildUseCaseInstructions } from "../instructions.mjs";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerUseCases } from "../use-case-registry.mjs";
-import { MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS } from "../manufacturing-live.mjs";
+import { MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, MANUFACTURING_SPECIALISTS } from "../manufacturing-live.mjs";
 
 test("customer prompt names and isolates the assigned organisation", () => {
   const customer = customers[0];
@@ -39,7 +39,20 @@ test("synthetic use-case prompt is detailed internally and concise conversationa
 
 test("live orchestrator owns specialist routing", () => {
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /interface never selects a specialist/i);
-  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /you alone choose the specialist tools/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /you alone choose the direct Data Agent tools/i);
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /use at least one specialist tool for every data question/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /four direct MCP tools/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Use at most two source queries and return no more than 140 words/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Never ask one tool to perform the final cross-domain synthesis/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /at most two tools for a cross-domain question/i);
   assert.doesNotMatch(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /preferred specialist lens/i);
+});
+
+test("every live specialist declares a Fabric agent binding variable", () => {
+  assert.equal(new Set(MANUFACTURING_SPECIALISTS.map((specialist) => specialist.fabricAgentIdVariable)).size, 4);
+  for (const specialist of MANUFACTURING_SPECIALISTS) {
+    assert.match(specialist.fabricAgentIdVariable, /^FABRIC_[A-Z_]+_AGENT_ID$/);
+    assert.match(specialist.mcpConnectionName, /^mcp-live-/);
+    assert.match(specialist.mcpServerLabel, /^[a-z][a-z0-9_]*$/);
+  }
 });

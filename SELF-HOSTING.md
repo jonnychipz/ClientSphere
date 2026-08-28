@@ -254,7 +254,7 @@ The `Validate and deploy ClientSphere` workflow will:
 2. sign in to Azure using OIDC;
 3. create or update Azure resources;
 4. crawl each official customer website;
-5. create one isolated vector store and four customer-specific agents per customer, plus the shared live mode when its four Fabric connections exist;
+5. create one isolated vector store and four customer-specific agents per customer, plus the shared live mode when its Fabric workspace and four Data Agent IDs are configured;
 6. build the application image in Azure Container Registry;
 7. deploy one Container App replica;
 8. verify the configured customer and mode counts;
@@ -318,14 +318,15 @@ OAuth callback URLs must match exactly, including HTTPS, hostname, path, and abs
 The base application deploys without Fabric or Entra configuration. Until this section is complete, the live mode shows **LIVE AGENT SETUP REQUIRED** while all public-intelligence and synthetic modes remain available.
 
 1. Publish four Microsoft Fabric Data Agents that cover the four specialist domains defined in `manufacturing-live.mjs`. Every person using the live mode needs direct read access to each Data Agent and its underlying data sources.
-2. In the Foundry project, open **Manage → Connected resources**, add one **Microsoft Fabric** connection for each published Data Agent, and use these exact names:
+2. Record the Fabric workspace ID and each published Data Agent item ID:
 
-   | Connection name | Specialist |
+   | Repository variable | Specialist |
    |---|---|
-   | `fabric-factory-pulse` | Current operating state, alerts, OEE, and work orders |
-   | `fabric-reliability-maintenance` | Condition, downtime, criticality, and maintenance |
-   | `fabric-quality-spectrometer` | Quality, inspection, scrap, and spectrometer readings |
-   | `fabric-customer-delivery-impact` | Affected orders, customer priority, and delivery impact |
+   | `FABRIC_WORKSPACE_ID` | Workspace containing all four Data Agents |
+   | `FABRIC_FACTORY_PULSE_AGENT_ID` | Current operating state, alerts, OEE, and work orders |
+   | `FABRIC_RELIABILITY_AGENT_ID` | Condition, downtime, criticality, and maintenance |
+   | `FABRIC_QUALITY_AGENT_ID` | Quality, inspection, scrap, and spectrometer readings |
+   | `FABRIC_DELIVERY_IMPACT_AGENT_ID` | Affected orders, customer priority, and delivery impact |
 
 3. Assign every live user, or an Entra group containing those users, the least-privilege **Foundry Agent Consumer** role on the Foundry project. Azure Owner/Contributor alone does not grant agent endpoint data actions. For one user object ID:
 
@@ -345,7 +346,7 @@ The base application deploys without Fabric or Entra configuration. Until this s
    .\scripts\configure-live-fabric.ps1
    ```
 
-   The helper verifies the four Foundry connections, shows the exact redirect URI, securely prompts for the application ID and secret, stores them in GitHub, and dispatches a full agent refresh. It never places the secret in command history or a process argument.
+   The helper securely prompts for any missing workspace/Data Agent IDs plus the application ID and secret, stores them in GitHub, and dispatches a full refresh. Provisioning creates four direct Fabric MCP connections automatically. It never places the secret in command history or a process argument.
 6. Wait for the workflow to succeed and verify:
 
    ```powershell
@@ -354,7 +355,7 @@ The base application deploys without Fabric or Entra configuration. Until this s
 
    A completed live deployment reports `liveFabricAgentsConfigured: 4`, `liveOrchestratorConfigured: true`, and `fabricAuthConfigured: true`.
 
-The browser then shows **CONNECT TO FABRIC**. After the user signs in, it changes to **LIVE · Microsoft Entra** with their identity and token expiry. Live questions go only to the shared orchestrator; its managed Foundry toolbox exposes the four A2A specialists under that user's Fabric permissions.
+The browser then shows **CONNECT TO FABRIC**. After the user signs in, it changes to **LIVE · Microsoft Entra** with their identity and token expiry. Live questions go only to the shared orchestrator, which selects the four direct Fabric Data Agent MCP tools under that user's Fabric permissions.
 
 ## 8. Become the administrator and onboard users
 
@@ -639,7 +640,7 @@ The application does not silently fall back to another model. A missing model or
 | Model deployment fails with quota/capacity/availability | Use a supported AI region, request quota, or deliberately change model capacity/version in Bicep |
 | Workflow says `ADMIN_LOGINS` or another variable is empty | Rerun bootstrap and inspect `gh variable list` |
 | Production says GitHub sign-in is not configured | Create the OAuth App, verify the exact callback URL, and rerun `configure-github-oauth.ps1` |
-| Live mode says setup is required | Create all four named Microsoft Fabric connections in Foundry, then rerun `configure-live-fabric.ps1` |
+| Live mode says setup is required | Confirm the workspace and four Data Agent IDs, then rerun `configure-live-fabric.ps1` so provisioning recreates the direct MCP connections |
 | Live mode asks the user to connect | Complete Microsoft Entra sign-in; the user must have access to all queried Fabric Data Agents and sources |
 | Live query returns 403 from Foundry | Assign the connected user or their group **Foundry Agent Consumer** on the Foundry project |
 | Live query returns no authorized data | Grant the connected Entra user direct read access in Fabric; do not replace the governed result with application credentials |

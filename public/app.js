@@ -1164,7 +1164,7 @@ function renderAgentModes() {
     els.agentModeDetail.innerHTML =
       `<div class="agent-detail-copy live-detail"><p class="live-disclosure">${escapeHtml(active.disclosure)}</p>` +
       `<div class="agent-detail-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` +
-      `<p>Ask naturally. The orchestrator selects and combines the underlying data specialists for every turn.</p>` +
+      `<p>Ask naturally. The orchestrator selects and combines the underlying Fabric Data Agents for every turn.</p>` +
       `<div class="agent-demo-prompts live-prompts">${promptButtons}</div></div>` +
       `<aside class="live-source-panel"><strong>Governed live data</strong>` +
       `<p>Source: Microsoft Fabric · Manufacturing-RTI-Demo</p>` +

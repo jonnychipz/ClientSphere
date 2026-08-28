@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 const browserSource = fs.readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const provisionSource = fs.readFileSync(new URL("../scripts/provision-customer-agents.mjs", import.meta.url), "utf8");
 
 test("live chat is wired only to the Foundry orchestrator", () => {
   assert.match(
@@ -18,5 +19,12 @@ test("live chat is wired only to the Foundry orchestrator", () => {
 test("browser does not expose or send specialist selection", () => {
   assert.doesNotMatch(browserSource, /liveSpecialist|selectLiveSpecialist|data-live-specialist/);
   assert.match(browserSource, /Ask the shopfloor orchestrator/);
-  assert.match(browserSource, /orchestrator selects and combines the underlying data specialists/);
+  assert.match(browserSource, /orchestrator selects and combines the underlying Fabric Data Agents/);
+});
+
+test("orchestrator uses direct Fabric MCP tools rather than the A2A toolbox", () => {
+  assert.match(provisionSource, /tools: directFabricTools/);
+  assert.match(provisionSource, /server_label: specialist\.mcpServerLabel/);
+  assert.match(provisionSource, /clientsphereArchitecture: "direct-fabric-mcp"/);
+  assert.doesNotMatch(provisionSource, /server_label: "manufacturing_specialists"/);
 });

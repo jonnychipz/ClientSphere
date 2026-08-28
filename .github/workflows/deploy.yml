@@ -196,6 +196,12 @@ jobs:
 
       - name: Provision customer agents
         if: steps.agent_refresh.outputs.refresh == 'true'
+        env:
+          FABRIC_WORKSPACE_ID: ${{ vars.FABRIC_WORKSPACE_ID }}
+          FABRIC_FACTORY_PULSE_AGENT_ID: ${{ vars.FABRIC_FACTORY_PULSE_AGENT_ID }}
+          FABRIC_RELIABILITY_AGENT_ID: ${{ vars.FABRIC_RELIABILITY_AGENT_ID }}
+          FABRIC_QUALITY_AGENT_ID: ${{ vars.FABRIC_QUALITY_AGENT_ID }}
+          FABRIC_DELIVERY_IMPACT_AGENT_ID: ${{ vars.FABRIC_DELIVERY_IMPACT_AGENT_ID }}
         run: npm run agents:provision
 
       - name: Preserve agent metadata
@@ -360,12 +366,21 @@ jobs:
         env:
           ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+          FABRIC_WORKSPACE_ID: ${{ vars.FABRIC_WORKSPACE_ID }}
+          FABRIC_FACTORY_PULSE_AGENT_ID: ${{ vars.FABRIC_FACTORY_PULSE_AGENT_ID }}
+          FABRIC_RELIABILITY_AGENT_ID: ${{ vars.FABRIC_RELIABILITY_AGENT_ID }}
+          FABRIC_QUALITY_AGENT_ID: ${{ vars.FABRIC_QUALITY_AGENT_ID }}
+          FABRIC_DELIVERY_IMPACT_AGENT_ID: ${{ vars.FABRIC_DELIVERY_IMPACT_AGENT_ID }}
         run: |
           url="${{ steps.outputs.outputs.app_url }}/healthz"
           expected_customers=$(jq 'length' config/customers.json)
           expected_modes=$((expected_customers * 5))
-          expected_live_agents=$(jq '(.liveManufacturing.agents // {}) | length' customer-agents.json)
-          expected_live_orchestrator=$(jq '(.liveManufacturing.orchestrator.agentName // "") != ""' customer-agents.json)
+          expected_live_agents=0
+          expected_live_orchestrator=false
+          if [[ -n "$FABRIC_WORKSPACE_ID" && -n "$FABRIC_FACTORY_PULSE_AGENT_ID" && -n "$FABRIC_RELIABILITY_AGENT_ID" && -n "$FABRIC_QUALITY_AGENT_ID" && -n "$FABRIC_DELIVERY_IMPACT_AGENT_ID" ]]; then
+            expected_live_agents=4
+            expected_live_orchestrator=true
+          fi
           expected_fabric_auth=false
           if [[ -n "$ENTRA_CLIENT_ID" && -n "$ENTRA_CLIENT_SECRET" ]]; then
             expected_fabric_auth=true

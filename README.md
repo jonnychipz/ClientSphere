@@ -63,8 +63,7 @@ flowchart LR
     W --> S[Azure Speech]
     W --> A[Customer-specific Foundry agent]
     W --> O[Live Foundry orchestrator]
-    O --> X[Four A2A specialists]
-    X --> D[Four Fabric Data Agents]
+    O -->|Direct MCP| D[Four Fabric Data Agents]
     A --> V[Isolated vector store]
     A --> F[Guarded official-site fetch]
     G[GitHub Actions] --> I[Bicep infrastructure]
@@ -143,7 +142,7 @@ npm test
    .\scripts\configure-github-oauth.ps1
    ```
 
-7. To enable live Fabric, publish four Fabric Data Agents, add the four named Microsoft Fabric connections, grant users **Foundry Agent Consumer**, register the delegated Entra application, then run `.\scripts\configure-live-fabric.ps1`.
+7. To enable live Fabric, publish four Fabric Data Agents, grant users **Foundry Agent Consumer**, register the delegated Entra application, then run `.\scripts\configure-live-fabric.ps1` with the workspace and Data Agent IDs.
 8. Sign in with the GitHub login selected during bootstrap and manage users at `/admin`.
 
 Use [SELF-HOSTING.md](SELF-HOSTING.md) for prerequisites, exact commands, regions/models, role assignments, troubleshooting, and removal.
