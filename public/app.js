@@ -1102,16 +1102,26 @@ async function disconnectFabric() {
   toast("Microsoft Entra disconnected from the live Fabric mode.");
 }
 
-function selectResponseMode(mode) {
+function selectResponseMode(mode, options = {}) {
   if (!["brief", "structured"].includes(mode)) return;
   state.responseMode = mode;
   [...els.responseModeSeg.querySelectorAll("[data-response-mode]")].forEach((button) => {
     button.classList.toggle("active", button.dataset.responseMode === mode);
   });
-  try { localStorage.setItem("clientsphere.responseMode", mode); } catch {}
-  toast(mode === "brief"
-    ? "Brief + voice mode: concise conversational answers."
-    : "Structured mode: detailed screen-first answers.");
+  if (options.persist !== false) {
+    try { localStorage.setItem("clientsphere.responseMode", mode); } catch {}
+  }
+  if (options.announce !== false) {
+    toast(mode === "brief"
+      ? "Brief + voice mode: concise conversational answers."
+      : "Structured mode: detailed screen-first answers.");
+  }
+}
+
+function applyResponseModeForAgent(mode) {
+  let preferred = "brief";
+  try { preferred = localStorage.getItem("clientsphere.responseMode") || "brief"; } catch {}
+  selectResponseMode(mode.isLive ? "structured" : preferred, { persist: false, announce: false });
 }
 
 function renderAgentModes() {
@@ -1230,6 +1240,7 @@ function selectAgentMode(modeId, options = {}) {
   state.greeted = false;
   state.roleplayActive = false;
   state.agentMode = mode.id;
+  applyResponseModeForAgent(mode);
   els.roleplayBanner.hidden = true;
   els.agentModeDisclosure.open = false;
   clearAttachment();
@@ -1375,6 +1386,7 @@ async function selectCustomer(customerId, options = {}) {
     try { savedMode = localStorage.getItem(`clientsphere.agentMode.${state.customer.id}`) || "general"; } catch {}
     if (!["general", ...(state.customer.useCases || []).map((useCase) => useCase.id)].includes(savedMode)) savedMode = "general";
     state.agentMode = savedMode;
+    applyResponseModeForAgent(currentModeDefinition());
     clearAttachment();
     renderAgentModes();
     renderWelcome();

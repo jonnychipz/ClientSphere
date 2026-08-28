@@ -45,6 +45,8 @@ test("live orchestrator owns specialist routing", () => {
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Use at most two source queries and return no more than 140 words/i);
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Never ask one tool to perform the final cross-domain synthesis/i);
   assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /at most two tools for a cross-domain question/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Markdown table with one row per known Line A machine/i);
+  assert.match(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /Distinguish "no matching rows" from "not authorized."/i);
   assert.doesNotMatch(MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS, /preferred specialist lens/i);
 });
 

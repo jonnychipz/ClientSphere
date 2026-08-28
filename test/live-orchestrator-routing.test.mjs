@@ -22,6 +22,7 @@ test("browser does not expose or send specialist selection", () => {
   assert.doesNotMatch(browserSource, /liveSpecialist|selectLiveSpecialist|data-live-specialist/);
   assert.match(browserSource, /Ask the shopfloor orchestrator/);
   assert.match(browserSource, /orchestrator selects and combines the underlying Fabric Data Agents/);
+  assert.match(browserSource, /mode\.isLive \? "structured" : preferred/);
 });
 
 test("orchestrator uses direct Fabric MCP tools rather than the A2A toolbox", () => {
