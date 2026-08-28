@@ -1083,6 +1083,18 @@ app.post("/api/chat", requireApproved(async (req, res) => {
     });
   } catch (err) {
     console.error("chat error:", err);
+    if (isLiveFabric && /CapacityLimitExceeded|Fabric compute capacity has exceeded its limits/i.test(err.message || "")) {
+      return res.status(503).json({
+        error: "The Fabric capacity is currently overloaded. Wait for carryforward usage to burn down, or ask the capacity administrator to scale or pause/resume it.",
+        code: "FABRIC_CAPACITY_EXCEEDED",
+      });
+    }
+    if (isLiveFabric && /TaskCanceledException|HttpClient\.Timeout of 100 seconds/i.test(err.message || "")) {
+      return res.status(504).json({
+        error: "The live Fabric query exceeded its tool timeout. Retry with a narrower question.",
+        code: "FABRIC_TOOL_TIMEOUT",
+      });
+    }
     res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : "Chat failed", detail: err.statusCode ? undefined : err.message });
   }
 }));

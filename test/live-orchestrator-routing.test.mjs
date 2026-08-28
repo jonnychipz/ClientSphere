@@ -13,6 +13,8 @@ test("live chat is wired only to the Foundry orchestrator", () => {
   );
   assert.match(serverSource, /agentContext = isLiveFabric \? "orchestrator" : ""/);
   assert.match(serverSource, /toolChoice: isLiveFabric \? "required" : undefined/);
+  assert.match(serverSource, /FABRIC_CAPACITY_EXCEEDED/);
+  assert.match(serverSource, /FABRIC_TOOL_TIMEOUT/);
   assert.doesNotMatch(serverSource, /liveSpecialist|CLIENTSPHERE_SPECIALIST_LENS/);
 });
 

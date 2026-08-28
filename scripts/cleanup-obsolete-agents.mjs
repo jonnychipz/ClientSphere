@@ -3,7 +3,7 @@ import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
 import { customers } from "../customer-registry.mjs";
 import { buildCustomerSyntheticUseCases } from "../use-case-registry.mjs";
-import { MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS } from "../manufacturing-live.mjs";
+import { MANUFACTURING_ORCHESTRATOR_NAME } from "../manufacturing-live.mjs";
 
 const endpoint = process.env.PROJECT_ENDPOINT;
 if (!endpoint) throw new Error("PROJECT_ENDPOINT is required.");
@@ -12,7 +12,6 @@ const project = new AIProjectClient(endpoint, new DefaultAzureCredential());
 const openAI = project.getOpenAIClient();
 const validAgentNames = new Set(["clientsphere-portfolio"]);
 const validStorePrefixes = new Set(["clientsphere-portfolio-kb-"]);
-for (const specialist of MANUFACTURING_SPECIALISTS) validAgentNames.add(specialist.agentName);
 validAgentNames.add(MANUFACTURING_ORCHESTRATOR_NAME);
 for (const customer of customers) {
   validAgentNames.add(`clientsphere-${customer.id}`);

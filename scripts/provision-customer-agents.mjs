@@ -13,7 +13,6 @@ import { buildCustomerAgentTools } from "../agent-tooling.mjs";
 import {
   MANUFACTURING_LIVE_MODE_ID, MANUFACTURING_ORCHESTRATOR_INSTRUCTIONS,
   MANUFACTURING_ORCHESTRATOR_NAME, MANUFACTURING_SPECIALISTS,
-  MANUFACTURING_TOOLBOX_CONNECTION_NAME, MANUFACTURING_TOOLBOX_NAME,
 } from "../manufacturing-live.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -178,102 +177,6 @@ async function upsertAgent({
     ? await project.agents.update(name, definition, options)
     : await project.agents.create(name, definition, options);
   return agent;
-}
-
-async function enableIncomingA2A(specialist) {
-  const access = await credential.getToken("https://ai.azure.com/.default");
-  const response = await fetch(`${endpoint}/agents/${encodeURIComponent(specialist.agentName)}?api-version=v1`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${access.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      agent_card: {
-        version: "1.0",
-        description: specialist.description,
-        skills: [{
-          id: specialist.id,
-          name: specialist.name,
-          description: specialist.summary,
-        }],
-      },
-      agent_endpoint: {
-        protocol_configuration: {
-          responses: {},
-          a2a: {},
-        },
-      },
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Could not enable A2A for ${specialist.name}: ${response.status} ${await response.text()}`);
-  }
-}
-
-async function ensureA2AConnection(specialist) {
-  const access = await credential.getToken("https://management.azure.com/.default");
-  const target = `${endpoint}/agents/${specialist.agentName}/endpoint/protocols/a2a`;
-  const response = await fetch(
-    `https://management.azure.com${projectResourceId}/connections/${specialist.a2aConnectionName}?api-version=2025-04-01-preview`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${access.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: specialist.a2aConnectionName,
-        type: "Microsoft.MachineLearningServices/workspaces/connections",
-        properties: {
-          authType: "UserEntraToken",
-          group: "ServicesAndApps",
-          category: "RemoteA2A",
-          target,
-          isSharedToAll: true,
-          sharedUserList: [],
-          Credentials: {},
-          metadata: { ApiType: "Azure", audience: "https://ai.azure.com" },
-        },
-      }),
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Could not create A2A connection for ${specialist.name}: ${response.status} ${await response.text()}`);
-  }
-  return project.connections.get(specialist.a2aConnectionName);
-}
-
-async function ensureToolboxConnection(toolboxUrl) {
-  const access = await credential.getToken("https://management.azure.com/.default");
-  const response = await fetch(
-    `https://management.azure.com${projectResourceId}/connections/${MANUFACTURING_TOOLBOX_CONNECTION_NAME}?api-version=2025-04-01-preview`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${access.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: MANUFACTURING_TOOLBOX_CONNECTION_NAME,
-        type: "Microsoft.MachineLearningServices/workspaces/connections",
-        properties: {
-          authType: "UserEntraToken",
-          group: "ServicesAndApps",
-          category: "RemoteTool",
-          target: toolboxUrl,
-          isSharedToAll: true,
-          sharedUserList: [],
-          Credentials: {},
-          metadata: { ApiType: "Azure", audience: "https://ai.azure.com" },
-        },
-      }),
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Could not create manufacturing toolbox connection: ${response.status} ${await response.text()}`);
-  }
-  return project.connections.get(MANUFACTURING_TOOLBOX_CONNECTION_NAME);
 }
 
 async function ensureFabricMcpConnection(specialist) {
